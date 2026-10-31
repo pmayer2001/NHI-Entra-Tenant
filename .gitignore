@@ -1,0 +1,36 @@
+# --- Secrets: never commit (CLAUDE.md §14.5) ---
+*.pem
+*.key
+*.pfx
+*.p12
+*.cer
+*.crt
+.env
+.env.*
+*token*.json
+secrets/
+.nhigov/
+
+# Tenant-specific config (tenant ID / client IDs stay out of the public repo)
+config.yaml
+
+# Python / tooling
+.venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+
+# Generated output
+reports/
+services/sensitive_api/usage.log
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

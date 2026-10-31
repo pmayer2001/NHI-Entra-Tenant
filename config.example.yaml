@@ -1,0 +1,19 @@
+# Copy to config.yaml (git-ignored) and fill in after following scripts/bootstrap_tenant.md.
+# Every value can also be set with an environment variable (shown on the right),
+# which is how GitHub Actions will supply them.
+
+tenant_id: "00000000-0000-0000-0000-000000000000"          # NHIGOV_TENANT_ID
+
+# Chosen from the Phase 0 probe results (ADR-003): agent_id | service_principal
+identity_backend: service_principal                         # NHIGOV_IDENTITY_BACKEND
+
+control_plane:
+  provisioner:
+    client_id: "00000000-0000-0000-0000-000000000000"      # NHIGOV_PROVISIONER_CLIENT_ID
+    cert_path: "~/.nhigov/certs/nhigov-provisioner.pem"    # NHIGOV_PROVISIONER_CERT_PATH
+  scanner:
+    client_id: "00000000-0000-0000-0000-000000000000"      # NHIGOV_SCANNER_CLIENT_ID
+    cert_path: "~/.nhigov/certs/nhigov-scanner.pem"        # NHIGOV_SCANNER_CERT_PATH
+
+graph:
+  base_url: "https://graph.microsoft.com"
