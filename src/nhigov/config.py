@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -39,6 +39,14 @@ class GraphSettings(BaseModel):
     base_url: str = "https://graph.microsoft.com"
 
 
+class SensitiveApiConfig(BaseModel):
+    """How the mock resource API validates tokens (ADR-009). Filled in once it's registered."""
+
+    # v2 tokens: the resource app's appId. v1 tokens: its identifier URI.
+    audience: str
+    token_version: Literal[1, 2] = 2
+
+
 class Config(BaseModel):
     tenant_id: str
     # e.g. contoso.onmicrosoft.com. Substituted for {tenant_domain} in registry UPNs,
@@ -47,6 +55,7 @@ class Config(BaseModel):
     identity_backend: IdentityBackendKind = IdentityBackendKind.SERVICE_PRINCIPAL
     control_plane: ControlPlane
     graph: GraphSettings = Field(default_factory=GraphSettings)
+    sensitive_api: SensitiveApiConfig | None = None
 
 
 # env var -> path into the config dict
@@ -58,6 +67,8 @@ _ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "NHIGOV_PROVISIONER_CERT_PATH": ("control_plane", "provisioner", "cert_path"),
     "NHIGOV_SCANNER_CLIENT_ID": ("control_plane", "scanner", "client_id"),
     "NHIGOV_SCANNER_CERT_PATH": ("control_plane", "scanner", "cert_path"),
+    "NHIGOV_API_AUDIENCE": ("sensitive_api", "audience"),
+    "NHIGOV_API_TOKEN_VERSION": ("sensitive_api", "token_version"),
 }
 
 

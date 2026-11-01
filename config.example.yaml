@@ -18,3 +18,8 @@ control_plane:
 
 graph:
   base_url: "https://graph.microsoft.com"
+
+# Mock Sensitive Records API (Phase 2). Fill in after the resource app is registered.
+sensitive_api:
+  audience: "00000000-0000-0000-0000-000000000000"        # NHIGOV_API_AUDIENCE (v2: the API's appId)
+  token_version: 2                                         # NHIGOV_API_TOKEN_VERSION

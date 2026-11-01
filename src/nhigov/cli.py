@@ -17,12 +17,14 @@ from nhigov.graph.auth import TokenAcquisitionError, provisioner_token, scanner_
 from nhigov.graph.client import GraphClient
 from nhigov.probe.checks import READ_CHECKS, Outcome
 from nhigov.probe.report import redact, render_matrix
+from nhigov.probe.resource import Verdict, render_resource_probe, run_resource_probe
 from nhigov.probe.runner import (
     leftover_objects,
     recommend_backend,
     run_read_checks,
     run_write_checks,
 )
+from nhigov.reconcile.resources import desired_application, desired_service_principal
 from nhigov.registry.findings import Severity
 from nhigov.registry.loader import PLACEHOLDER_DOMAIN, load_registry
 from nhigov.registry.online import validate_online
@@ -31,6 +33,8 @@ from nhigov.registry.validate import validate_registry
 app = typer.Typer(no_args_is_help=True, help="NHI governance for agentic workflows (Entra ID).")
 cert_app = typer.Typer(no_args_is_help=True, help="Local certificate credentials (P7: no secrets).")
 app.add_typer(cert_app, name="cert")
+api_app = typer.Typer(no_args_is_help=True, help="The mock Sensitive Records API (Phase 2).")
+app.add_typer(api_app, name="api")
 
 ConfigOpt = Annotated[Path, typer.Option("--config", help="Path to config.yaml")]
 
@@ -173,6 +177,72 @@ def validate(
         typer.secho(f"invalid: {errors} error(s), {warnings} warning(s)", fg=typer.colors.RED)
         raise typer.Exit(1)
     typer.secho(f"valid: 0 errors, {warnings} warning(s)", fg=typer.colors.GREEN)
+
+
+@api_app.command("probe")
+def api_probe(
+    config_path: ConfigOpt = Path("config.yaml"),
+    registry_dir: Annotated[Path, typer.Option("--registry")] = Path("registry"),
+    resource_id: Annotated[str, typer.Option("--resource")] = "res-sensitive-records",
+    output: Annotated[Path, typer.Option()] = Path("docs/spikes/resource-registration-probe.md"),
+) -> None:
+    """Read-only checks before registering the API in Entra (runs as the scanner)."""
+    cfg = load_config(config_path)
+    registry, findings = load_registry(registry_dir, cfg.tenant_domain or PLACEHOLDER_DOMAIN)
+    resource = registry.resources.get(resource_id)
+    if resource is None or findings:
+        raise typer.BadParameter(f"{resource_id} not loadable; run `nhigov validate` first")
+
+    with GraphClient(scanner_token(cfg), base_url=cfg.graph.base_url) as scanner:
+        answers = run_resource_probe(
+            scanner, resource, cfg.tenant_id, cfg.control_plane.provisioner.client_id
+        )
+    app_body = desired_application(resource)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        render_resource_probe(answers, app_body, desired_service_principal("<appId>")),
+        encoding="utf-8",
+    )
+    colors = {Verdict.GO: typer.colors.GREEN, Verdict.WARN: typer.colors.YELLOW}
+    for a in answers:
+        typer.secho(
+            f" {a.id} {a.verdict.value:<8} {a.question}\n          {redact(a.detail)}",
+            fg=colors.get(a.verdict, typer.colors.RED),
+        )
+    typer.echo(f"\nWrote {output} (includes the exact bodies apply would send)")
+    if any(a.verdict in (Verdict.BLOCKED, Verdict.UNKNOWN) for a in answers):
+        raise typer.Exit(1)
+
+
+@api_app.command("serve")
+def api_serve(
+    config_path: ConfigOpt = Path("config.yaml"),
+    host: str = "127.0.0.1",
+    port: int = 8000,
+) -> None:
+    """Run the Sensitive Records API locally. Tokens are validated against your tenant."""
+    import uvicorn  # imported here so other commands don't pay for the web stack
+
+    from sensitive_api.app import RecordStore, create_app
+    from sensitive_api.auth import JwksCache, TokenValidator, http_jwks_fetcher
+    from sensitive_api.settings import ApiSettings
+    from sensitive_api.usage import UsageLog
+
+    cfg = load_config(config_path)
+    if cfg.sensitive_api is None:
+        raise typer.BadParameter(
+            "add a sensitive_api section to config.yaml (see config.example.yaml); "
+            "the audience comes from registering res-sensitive-records"
+        )
+    settings = ApiSettings(
+        tenant_id=cfg.tenant_id,
+        audience=cfg.sensitive_api.audience,
+        token_version=cfg.sensitive_api.token_version,
+    )
+    validator = TokenValidator(settings, JwksCache(http_jwks_fetcher(settings.jwks_url)))
+    api = create_app(validator, RecordStore.from_file(), UsageLog(settings.usage_log))
+    typer.echo(f"usage log: {settings.usage_log}")
+    uvicorn.run(api, host=host, port=port)
 
 
 def run() -> None:

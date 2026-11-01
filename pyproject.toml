@@ -7,11 +7,14 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "azure-identity>=1.19",
     "cryptography>=43",
+    "fastapi>=0.162.0",
     "httpx>=0.27",
     "pydantic>=2.9",
+    "pyjwt[crypto]>=2.15.1",
     "pyyaml>=6.0",
     "structlog>=24.4",
     "typer>=0.12",
+    "uvicorn>=0.54.0",
 ]
 
 [project.scripts]
@@ -31,7 +34,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/nhigov"]
+# The Sensitive API is a separate top-level package: a resource server must not
+# depend on the governance tooling that provisions it.
+packages = ["src/nhigov", "services/sensitive_api"]
 
 [tool.ruff]
 line-length = 100
@@ -41,13 +46,16 @@ target-version = "py312"
 select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
 ignore = ["S101"]  # assert is fine in tests
 
+[tool.ruff.lint.isort]
+known-first-party = ["nhigov", "sensitive_api"]
+
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S105", "S106"]  # fake tokens in fixtures
 
 [tool.mypy]
 strict = true
 python_version = "3.12"
-mypy_path = "src"
+mypy_path = "src:services"
 
 [[tool.mypy.overrides]]
 module = ["respx.*"]
