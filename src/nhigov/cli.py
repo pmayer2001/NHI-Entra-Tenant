@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated
 
+import httpx
 import structlog
 import typer
 
@@ -17,6 +18,7 @@ from nhigov.config import Config, load_config, load_tenant_domain
 from nhigov.graph.auth import TokenAcquisitionError, provisioner_token, scanner_token
 from nhigov.graph.client import GraphClient
 from nhigov.probe.checks import READ_CHECKS, Outcome
+from nhigov.probe.gate import NOT_ASSIGNED, check_gate
 from nhigov.probe.report import redact, render_matrix
 from nhigov.probe.resource import Verdict, render_resource_probe, run_resource_probe
 from nhigov.probe.runner import (
@@ -215,6 +217,44 @@ def api_probe(
     typer.echo(f"\nWrote {output} (includes the exact bodies apply would send)")
     if any(a.verdict in (Verdict.BLOCKED, Verdict.UNKNOWN) for a in answers):
         raise typer.Exit(1)
+
+
+@api_app.command("gate-check")
+def api_gate_check(
+    config_path: ConfigOpt = Path("config.yaml"),
+    registry_dir: Annotated[Path, typer.Option("--registry")] = Path("registry"),
+) -> None:
+    """Ask Entra for API tokens as clients holding no role on it; expect refusal (AADSTS501051).
+
+    Doesn't change anything: it only requests tokens.
+    """
+    cfg = load_config(config_path)
+    registry, _ = load_registry(registry_dir, cfg.tenant_domain or PLACEHOLDER_DOMAIN)
+    scope = f"{registry.resources['res-sensitive-records'].identifier_uri}/.default"
+    clients = {
+        "nhigov-scanner": cfg.control_plane.scanner,
+        "nhigov-provisioner": cfg.control_plane.provisioner,
+    }
+    typer.echo(f"Requesting tokens for {scope} (neither identity holds a role on it)\n")
+    with httpx.Client(timeout=30.0) as http:
+        results = [
+            check_gate(http, cfg.tenant_id, name, c.client_id, c.resolved_cert_path(), scope)
+            for name, c in clients.items()
+        ]
+    for r in results:
+        if r.refused:
+            typer.secho(f"  PASS {r.identity}: refused by Entra (AADSTS{NOT_ASSIGNED})", fg="green")
+        elif r.granted_roles or r.detail == "token issued":
+            typer.secho(
+                f"  FAIL {r.identity}: token issued, roles={list(r.granted_roles)}", fg="red"
+            )
+        else:
+            codes = ", ".join(f"AADSTS{c}" for c in r.codes) or "?"
+            typer.secho(f"  FAIL {r.identity}: refused for another reason ({codes})", fg="red")
+        typer.echo(f"       {redact(r.detail)}")
+    if not all(r.refused for r in results):
+        raise typer.Exit(1)
+    typer.echo("\nThe first gate holds: no role assignment, no token.")
 
 
 @api_app.command("serve")
