@@ -10,7 +10,7 @@ The mock Sensitive Records API (`res-sensitive-records`) defines **separate role
 
 | Role | `allowedMemberTypes` | Effect |
 |---|---|---|
-| `Records.Read.All` | `User` | Full records, including PII |
+| `Records.Read.All` | `User` | Full records, including PII (claimant name, SSN, date of birth, account number) |
 | `Records.Read.Redacted` | `Application` | Records with SSN / DOB / account number redacted |
 | `Records.Read.Metadata` | `Application` | IDs, timestamps, status only |
 | `Records.Annotate` | `Application` | Append a triage note; cannot modify fields |

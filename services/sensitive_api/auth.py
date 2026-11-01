@@ -100,7 +100,8 @@ class Caller:
     object_id: str  # `oid`: the service principal / agent identity / user object
     idtyp: str  # "app" for app-only tokens
     roles: frozenset[str]
-    # Under Agent ID, the blueprint that obtained this agent's token (spike finding).
+    # Under Agent ID, the blueprint behind this agent, if the token says (v1 Graph tokens
+    # did in the spike; v2 tokens for our API don't, observed in Phase 4).
     blueprint_app_id: str | None = None
     claims: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
 

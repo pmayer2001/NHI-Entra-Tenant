@@ -18,20 +18,22 @@ class Show(StrEnum):
 
 
 METADATA = ("id", "status", "created_at", "updated_at")
-PII = ("ssn", "date_of_birth", "account_number")  # ADR-004's sensitive fields
+# ADR-004's sensitive fields, plus the claimant's name (Paul, 2026-11-01): triage needs
+# the claim, not who made it, so no agent role sees a person's identity.
+PII = ("claimant_name", "ssn", "date_of_birth", "account_number")
 
 VIEWS: dict[str, dict[str, Show]] = {
     "Records.Read.Metadata": dict.fromkeys(METADATA, Show.CLEAR),
     "Records.Read.Redacted": {
         **dict.fromkeys(METADATA, Show.CLEAR),
-        **dict.fromkeys(("claimant_name", "claim_type", "amount", "description"), Show.CLEAR),
+        **dict.fromkeys(("claim_type", "amount", "description"), Show.CLEAR),
         **dict.fromkeys(PII, Show.MASKED),
         "notes": Show.CLEAR,
     },
     # Human-only role (member_types: [User]); no agent can be assigned it.
     "Records.Read.All": {
         **dict.fromkeys(METADATA, Show.CLEAR),
-        **dict.fromkeys(("claimant_name", "claim_type", "amount", "description"), Show.CLEAR),
+        **dict.fromkeys(("claim_type", "amount", "description"), Show.CLEAR),
         **dict.fromkeys(PII, Show.CLEAR),
         "notes": Show.CLEAR,
     },

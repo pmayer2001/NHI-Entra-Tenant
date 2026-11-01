@@ -16,13 +16,7 @@ from pathlib import Path
 
 import httpx
 
-from nhigov.agent_auth import (
-    JWT_BEARER,
-    TokenError,
-    client_assertion,
-    request_token,
-    unverified_claims,
-)
+from nhigov.agent_auth import TokenError, app_token, unverified_claims
 
 NOT_ASSIGNED = 501051  # "Application ... is not assigned to a role for the application"
 
@@ -36,27 +30,11 @@ class GateResult:
     granted_roles: tuple[str, ...] = ()  # set only if a token was (wrongly) issued
 
 
-def request_api_token(
-    http: httpx.Client, tenant_id: str, client_id: str, pem: Path, scope: str
-) -> str:
-    return request_token(
-        http,
-        tenant_id,
-        {
-            "client_id": client_id,
-            "scope": scope,
-            "grant_type": "client_credentials",
-            "client_assertion_type": JWT_BEARER,
-            "client_assertion": client_assertion(pem, client_id, tenant_id),
-        },
-    )
-
-
 def check_gate(
     http: httpx.Client, tenant_id: str, identity: str, client_id: str, pem: Path, scope: str
 ) -> GateResult:
     try:
-        token = request_api_token(http, tenant_id, client_id, pem, scope)
+        token = app_token(http, tenant_id, client_id, pem, scope)
     except TokenError as exc:
         first_line = exc.description.splitlines()[0] if exc.description else exc.error
         return GateResult(identity, NOT_ASSIGNED in exc.codes, tuple(exc.codes), first_line)

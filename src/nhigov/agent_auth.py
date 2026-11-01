@@ -91,6 +91,22 @@ def request_token(http: httpx.Client, tenant_id: str, form: dict[str, str]) -> s
     )
 
 
+def app_token(http: httpx.Client, tenant_id: str, client_id: str, pem: Path, scope: str) -> str:
+    """A classic app-only token: the app proves possession of its own certificate.
+    Used by service-principal-backend NHIs, which have their own credential."""
+    return request_token(
+        http,
+        tenant_id,
+        {
+            "client_id": client_id,
+            "scope": scope,
+            "grant_type": "client_credentials",
+            "client_assertion_type": JWT_BEARER,
+            "client_assertion": client_assertion(pem, client_id, tenant_id),
+        },
+    )
+
+
 def blueprint_exchange_token(
     http: httpx.Client,
     tenant_id: str,

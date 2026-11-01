@@ -14,6 +14,9 @@ import structlog
 import typer
 
 from nhigov import __version__
+from nhigov.agent_auth import TokenError, unverified_claims
+from nhigov.agents.identity import NotProvisioned, acquire_token, credentials_for
+from nhigov.agents.stubs import STUBS
 from nhigov.certs import DEFAULT_CERT_DIR, DEFAULT_LIFETIME_DAYS, generate_self_signed
 from nhigov.config import Config, load_config, load_tenant_domain
 from nhigov.graph.auth import TokenAcquisitionError, provisioner_token, scanner_token
@@ -42,6 +45,8 @@ from nhigov.registry.validate import validate_registry
 app = typer.Typer(no_args_is_help=True, help="NHI governance for agentic workflows (Entra ID).")
 cert_app = typer.Typer(no_args_is_help=True, help="Local certificate credentials (P7: no secrets).")
 app.add_typer(cert_app, name="cert")
+agent_app = typer.Typer(no_args_is_help=True, help="Run the deterministic agent stubs (Phase 4).")
+app.add_typer(agent_app, name="agent")
 api_app = typer.Typer(no_args_is_help=True, help="The mock Sensitive Records API (Phase 2).")
 app.add_typer(api_app, name="api")
 
@@ -441,6 +446,58 @@ def _set_api_audience(config_path: Path, app_id: str) -> bool:
     )
     config_path.write_bytes((text.rstrip("\n") + "\n" + block).encode("utf-8"))
     return True
+
+
+@agent_app.command("run")
+def agent_run(
+    workflow: Annotated[str, typer.Argument(help="e.g. wf-claims-triage")],
+    agent: Annotated[str, typer.Argument(help="e.g. agent-summarizer")],
+    api_url: Annotated[str, typer.Option(help="Where `nhigov api serve` is listening")] = (
+        "http://127.0.0.1:8000"
+    ),
+    record: Annotated[list[str] | None, typer.Option(help="Record IDs to work on")] = None,
+    limit: Annotated[int, typer.Option(help="At most this many records")] = 3,
+    config_path: ConfigOpt = Path("config.yaml"),
+    state_path: Annotated[Path, typer.Option("--state")] = STATE_PATH,
+) -> None:
+    """Run one agent as its own NHI against the running Sensitive Records API."""
+    cfg = load_config(config_path)
+    registry, _ = load_registry(Path("registry"), cfg.tenant_domain or PLACEHOLDER_DOMAIN)
+    key = f"{workflow}/{agent}"
+    wf = registry.workflows.get(workflow)
+    if wf is None or all(wa.ref != agent for wa in wf.agents):
+        raise typer.BadParameter(f"{key} isn't a (workflow, agent) pair in the registry (P1)")
+    stub = STUBS.get(agent)
+    if stub is None:
+        raise typer.BadParameter(f"no stub for {agent}")
+    try:
+        creds = credentials_for(key, load_state(state_path))
+    except NotProvisioned as exc:
+        raise typer.BadParameter(str(exc)) from None
+
+    scope = f"{registry.resources['res-sensitive-records'].identifier_uri}/.default"
+    flow = "blueprint -> agent token exchange" if creds.blueprint_app_id else "own certificate"
+    typer.echo(f"{key}: getting a token as its NHI ({creds.backend}, {flow})")
+    with httpx.Client(timeout=30.0) as http:
+        try:
+            token = acquire_token(http, cfg.tenant_id, creds, scope)
+        except TokenError as exc:
+            typer.secho(f"Entra refused the token: {exc}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1) from None
+    roles = sorted(unverified_claims(token).get("roles", []))
+    typer.echo(f"token roles: {roles}\n")
+    headers = {"Authorization": f"Bearer {token}"}
+    with httpx.Client(base_url=api_url, headers=headers, timeout=30.0) as api:
+        try:
+            lines = stub(api, record or [], limit)
+        except httpx.HTTPStatusError as exc:
+            typer.secho(f"API refused: {exc.response.status_code} {exc.response.text}", fg="red")
+            raise typer.Exit(1) from None
+        except httpx.ConnectError:
+            typer.secho(f"API not reachable at {api_url}; start `nhigov api serve`", fg="red")
+            raise typer.Exit(1) from None
+    for line in lines:
+        typer.echo(f"  {line}")
 
 
 def run() -> None:

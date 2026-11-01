@@ -126,8 +126,9 @@ def test_redacted_role_reads_record_with_pii_masked(client: TestClient) -> None:
     r = client.get(f"/records/{REC}", headers=auth(token(claims(roles=["Records.Read.Redacted"]))))
     assert r.status_code == 200
     body = r.json()
-    assert body["claimant_name"] == RECORDS[0]["claimant_name"]
+    assert body["claim_type"] == RECORDS[0]["claim_type"]
     assert all(body[f] == REDACTED for f in PII)
+    assert body["claimant_name"] == REDACTED  # who made the claim isn't triage data
 
 
 def test_annotate_role_appends_a_note(client: TestClient) -> None:
@@ -142,6 +143,7 @@ def test_human_full_read_sees_pii(client: TestClient) -> None:
     r = client.get(f"/records/{REC}/full", headers=auth(token(user_claims())))
     assert r.status_code == 200
     assert r.json()["ssn"] == RECORDS[0]["ssn"]
+    assert r.json()["claimant_name"] == RECORDS[0]["claimant_name"]  # humans see it
 
 
 # ------------------------------------------------------------------ 401: untrusted tokens

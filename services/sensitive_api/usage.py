@@ -26,7 +26,9 @@ class UsageEvent:
     appid: str | None = None
     oid: str | None = None
     idtyp: str | None = None
-    blueprint_appid: str | None = None  # xms_par_app_azp: ties an agent call to its blueprint
+    # xms_par_app_azp, when the token carries it. Observed (Phase 4): v2 tokens for this
+    # API don't, so blueprint attribution is done from nhigov's state, not here.
+    blueprint_appid: str | None = None
     role_used: str | None = None  # the route's required role, only when allowed
     granted_roles: tuple[str, ...] = ()
     reason: str | None = None  # why a token was rejected (never sent to the caller)
