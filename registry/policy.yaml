@@ -26,6 +26,13 @@ max_credential_lifetime_days: 180   # matches the app management policy cap (§8
 sponsor_grace_days: 14              # sponsor disabled -> NHI disabled after this (§8)
 retirement_grace_days: 14           # retired -> soft-deleted after this
 expiry_notice_days: 14              # "expiring" state starts this long before expires
+max_blueprint_credentials: 2        # NHI-011: one per runtime (local, github-actions)
+# Graph permissions a blueprint principal may hold. Entra grants every blueprint principal
+# AgentIdentity.CreateAsManager itself and won't let it be removed ("EntitlementGrants can
+# be updated only through a source"), so it's accepted here (Paul, 2026-11-01). Anything
+# else on a blueprint is flagged by NHI-007 and revoked by `apply`.
+blueprint_graph_grants:
+  - AgentIdentity.CreateAsManager   # system-managed; a blueprint key can mint agents
 
 # P9: the governance tooling must itself be registered.
 control_plane: [nhigov-provisioner, nhigov-scanner]

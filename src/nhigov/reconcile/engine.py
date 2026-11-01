@@ -23,6 +23,7 @@ from nhigov.registry.loader import Registry
 
 JsonDict = dict[str, Any]
 GRAPH_USERS = "https://graph.microsoft.com/v1.0/users/"
+GRAPH_APP_ID = "00000003-0000-0000-c000-000000000000"
 # Just-created objects (and their owner links) replicate for a few seconds (Phase 0).
 LAG_BACKOFF = (2.0, 4.0, 8.0, 16.0)
 _LAG_MESSAGES = ("does not exist", "not found", "resourcenotfound")
@@ -61,11 +62,22 @@ class PlanContext:
     today: date
     cert_dir: Path = DEFAULT_CERT_DIR
     _user_ids: dict[str, str] = field(default_factory=dict)
+    _graph_sp: tuple[str, dict[str, str]] | None = None
 
     def user_id(self, upn: str) -> str:
         if upn not in self._user_ids:
             self._user_ids[upn] = self.graph.get(f"users/{upn}", params={"$select": "id"})["id"]
         return self._user_ids[upn]
+
+    def graph_sp(self) -> tuple[str, dict[str, str]]:
+        """Microsoft Graph's service principal ID and its app roles (role ID -> value)."""
+        if self._graph_sp is None:
+            sp = self.graph.get(
+                "servicePrincipals",
+                params={"$filter": f"appId eq '{GRAPH_APP_ID}'", "$select": "id,appRoles"},
+            )["value"][0]
+            self._graph_sp = (sp["id"], {r["id"]: r["value"] for r in sp.get("appRoles", [])})
+        return self._graph_sp
 
     def sponsor_bind(self, upns: tuple[str, ...]) -> list[str]:
         return [f"{GRAPH_USERS}{self.user_id(u)}" for u in upns]
@@ -178,6 +190,12 @@ def _blueprint_principal(g: GraphClient, s: Step, st: TenantState, sl: Any) -> s
     return f"created blueprint principal for bp-{s.key}"
 
 
+def _blueprint_grant_revoke(g: GraphClient, s: Step, st: TenantState, sl: Any) -> str:
+    principal = _blueprint(st, s.key).principal_id
+    g.delete(f"servicePrincipals/{principal}/appRoleAssignments/{s.body['assignmentId']}")
+    return f"revoked {s.body['role']} from the principal of bp-{s.key}"
+
+
 def _blueprint_credential(g: GraphClient, s: Step, st: TenantState, sl: Any) -> str:
     send(g, "PATCH", _bp_path(_blueprint(st, s.key)), s.body, sl)
     return f"uploaded certificate (public key only) to bp-{s.key}"
@@ -264,6 +282,7 @@ HANDLERS: dict[str, Handler] = {
     "blueprint.principal": _blueprint_principal,
     "blueprint.credential": _blueprint_credential,
     "blueprint.adopt": _adopt,
+    "blueprint.revoke": _blueprint_grant_revoke,
     "agent.create": _agent_create,
     "agent.enable": _agent_set_enabled,
     "agent.disable": _agent_set_enabled,

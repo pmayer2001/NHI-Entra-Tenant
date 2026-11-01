@@ -55,7 +55,9 @@ def tenant(**kwargs: int) -> FakeTenant:
         _control_plane_roles("nhigov-scanner"),
         _control_plane_roles("nhigov-provisioner"),
     )
-    t.add_graph_sp(sorted({*scanner, *provisioner, "Directory.ReadWrite.All"}))
+    t.add_graph_sp(
+        sorted({*scanner, *provisioner, "Directory.ReadWrite.All", "AgentIdentity.CreateAsManager"})
+    )
     t.add_client("scanner-sp", "scanner-app", scanner)
     t.add_client("provisioner-sp", "provisioner-app", provisioner)
     t.install()
@@ -149,6 +151,11 @@ def test_apply_then_plan_again_is_a_noop(cert_dir: Path) -> None:
     assert roles_of(ROUTER) == {"Records.Read.Metadata", "Records.Annotate"}
     assert roles_of(DEMO) == {"Records.Read.Metadata"}
     assert all(bp["keyCredentials"] for bp in t.blueprints())  # public certs uploaded
+    for bp in state.blueprints.values():  # only Entra's own grant, accepted by policy
+        assert bp.principal_id is not None
+        assert [a["appRoleId"] for a in t.assignments[bp.principal_id]] == [
+            "role-AgentIdentity.CreateAsManager"
+        ]
     agents = {a["displayName"]: a for a in t.agents()}
     assert agents["nhi-wf-claims-triage-agent-router"]["agentIdentityBlueprintId"] == (
         state.blueprints["agent-router"].app_id
@@ -336,3 +343,39 @@ def test_unknown_backend_is_rejected(tmp_path: Path) -> None:
     )
     _, findings = load_registry(reg)
     assert any(f.rule == "REG-000" and "backend" in f.message for f in findings)
+
+
+# ------------------------------------------------------------------ blueprint Graph grants
+
+
+@respx.mock
+def test_other_graph_grant_on_a_blueprint_is_revoked(cert_dir: Path) -> None:
+    """Policy accepts Entra's system-managed grant; anything else on a blueprint goes."""
+    t = tenant()
+    state = TenantState()
+    apply(state, cert_dir)
+    principal = state.blueprints["agent-router"].principal_id
+    assert principal is not None
+    t.assignments[principal].append(
+        {"id": "added", "resourceId": "graph-sp", "appRoleId": "role-Directory.ReadWrite.All"}
+    )
+
+    p = plan(state, cert_dir)
+    assert kinds(p) == [("blueprint.revoke", "agent-router")]
+    assert p.steps[0].body["role"] == "Directory.ReadWrite.All"
+    apply(state, cert_dir)
+    assert [a["id"] for a in t.assignments[principal]][-1] != "added"
+    assert plan(state, cert_dir).steps == []
+
+
+@respx.mock
+def test_without_policy_acceptance_the_system_grant_would_be_planned(cert_dir: Path) -> None:
+    """Why the policy lists it: an empty list plans a revoke Entra will refuse."""
+    tenant()
+    state = TenantState()
+    apply(state, cert_dir)
+    policy = REGISTRY.policy
+    assert policy is not None
+    strict = replace(REGISTRY, policy=policy.model_copy(update={"blueprint_graph_grants": []}))
+    revokes = [s for s in plan(state, cert_dir, strict).steps if s.kind == "blueprint.revoke"]
+    assert {s.body["role"] for s in revokes} == {"AgentIdentity.CreateAsManager"}

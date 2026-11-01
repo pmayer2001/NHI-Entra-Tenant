@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -19,8 +20,11 @@ from nhigov.agents.identity import NotProvisioned, acquire_token, credentials_fo
 from nhigov.agents.stubs import STUBS
 from nhigov.certs import DEFAULT_CERT_DIR, DEFAULT_LIFETIME_DAYS, generate_self_signed
 from nhigov.config import Config, load_config, load_tenant_domain
+from nhigov.discovery.inventory import Inventory
+from nhigov.discovery.report import write_reports
+from nhigov.discovery.scan import collect_inventory, evaluate
 from nhigov.graph.auth import TokenAcquisitionError, provisioner_token, scanner_token
-from nhigov.graph.client import GraphClient
+from nhigov.graph.client import GraphClient, GraphError
 from nhigov.probe.checks import READ_CHECKS, Outcome
 from nhigov.probe.gate import NOT_ASSIGNED, check_gate
 from nhigov.probe.report import redact, render_matrix
@@ -417,13 +421,23 @@ def apply(
         save_state(s, state_path)
 
     with GraphClient(provisioner_token(cfg), base_url=cfg.graph.base_url) as prov:
-        # Resources first: grants need the API's service principal to exist.
-        for p in full.resources:
-            if not p.is_noop:
-                for line in apply_plan(prov, p, state, save):
-                    typer.secho(f"  {line}", fg=typer.colors.GREEN)
-        for line in apply_steps(prov, full.identities.steps, state, save):
-            typer.secho(f"  {line}", fg=typer.colors.GREEN)
+        try:
+            # Resources first: grants need the API's service principal to exist.
+            for p in full.resources:
+                if not p.is_noop:
+                    for line in apply_plan(prov, p, state, save):
+                        typer.secho(f"  {line}", fg=typer.colors.GREEN)
+            for line in apply_steps(prov, full.identities.steps, state, save):
+                typer.secho(f"  {line}", fg=typer.colors.GREEN)
+        except GraphError as exc:
+            typer.secho(f"\nApply stopped: Entra refused a step.\n  {exc}", fg="red", err=True)
+            typer.secho(
+                f"Steps before it were applied and recorded in {state_path}; nothing after it "
+                "ran. Fix the cause, then run `nhigov plan` to see what's left.",
+                fg="red",
+                err=True,
+            )
+            raise typer.Exit(1) from None
     typer.echo(
         f"\nState saved to {state_path}. Run `nhigov plan` again: it should show no changes."
     )
@@ -446,6 +460,43 @@ def _set_api_audience(config_path: Path, app_id: str) -> bool:
     )
     config_path.write_bytes((text.rstrip("\n") + "\n" + block).encode("utf-8"))
     return True
+
+
+@app.command()
+def scan(
+    config_path: ConfigOpt = Path("config.yaml"),
+    registry_dir: Annotated[Path, typer.Option("--registry")] = Path("registry"),
+    state_path: Annotated[Path, typer.Option("--state")] = STATE_PATH,
+    out_dir: Annotated[Path, typer.Option("--out")] = Path("reports"),
+    from_inventory: Annotated[
+        Path | None, typer.Option(help="Re-run the rules on a saved inventory (offline)")
+    ] = None,
+) -> None:
+    """Inventory every NHI in the tenant and flag problems (read-only, as the scanner)."""
+    cfg = load_config(config_path)
+    registry, findings_reg = load_registry(registry_dir, cfg.tenant_domain or PLACEHOLDER_DOMAIN)
+    if any(f.severity is Severity.ERROR for f in findings_reg + validate_registry(registry)):
+        raise typer.BadParameter("the registry has errors; run `nhigov validate` first")
+    state = load_state(state_path)
+    now = datetime.now(UTC)
+    inventory = (
+        Inventory.load(from_inventory)
+        if from_inventory
+        else collect_inventory(cfg, registry, state, now)
+    )
+    findings = evaluate(inventory, registry, state, now)
+    paths = write_reports(inventory, findings, out_dir, now)
+
+    counts = Counter(n.classification for n in inventory.nhis)
+    typer.echo("Inventory: " + ", ".join(f"{counts[c]} {c}" for c in sorted(counts)))
+    colors = {"critical": "red", "high": "red", "medium": "yellow", "low": "white"}
+    typer.echo(f"\n{len(findings)} finding(s)")
+    for f in findings:
+        typer.secho(
+            f"  {f.severity.value:<8} {f.rule}  {f.display_name}: {f.message}",
+            fg=colors[f.severity.value],
+        )
+    typer.echo("\nWrote " + ", ".join(p.as_posix() for p in paths))
 
 
 @agent_app.command("run")

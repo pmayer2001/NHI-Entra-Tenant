@@ -33,6 +33,13 @@ The write probe showed the provisioner can **create** Agent ID objects but not *
 
 Confirmed after granting: `AgentIdentityBlueprint.DeleteRestore.All` works only on `DELETE /applications/{id}`, not on the documented typed-cast path (403). See learning notes.
 
+### Amendment (2026-11-01): blueprint principal delete, approved by Paul and applied
+| Permission | Needed for | Evidence |
+|---|---|---|
+| `AgentIdentityBlueprintPrincipal.DeleteRestore.All` | Delete a blueprint principal: the middle step of retiring a blueprint (agents -> blueprint principal -> blueprint, because deletes don't cascade). Soft-delete, restorable for 30 days. | Seed cleanup: 403 on both `DELETE /servicePrincipals/{id}` and the typed-cast path, although the provisioner owns the principal. Graph Explorer can't consent to Agent ID scopes, so a human couldn't delete it either. |
+
+Not on `policy.high_risk_permissions`. Declared in `wf-control-plane.yaml`, so the report-only control-plane check and NHI-007 expect it.
+
 **Not proposed:** `AgentIdentity.ReadWrite.All`. If `EnableDisable.All` doesn't allow setting `tags`, ADR-006 falls back to the state file plus naming convention rather than widening the provisioner.
 **Still provisional:** `AgentIdentity.Create.All`. W03 succeeded *with* it, so we don't yet know whether ownership alone would suffice.
 

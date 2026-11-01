@@ -18,12 +18,19 @@ The mock Sensitive Records API (`res-sensitive-records`) defines **separate role
 The API validates the JWT (signature via the tenant's JWKS, `iss`, `aud`, `exp`), requires `idtyp == "app"` on agent routes, maps each route to a required role, redacts fields the role doesn't allow, and logs every call (feeds L3 usage analytics, ADR-007).
 
 ## Why
-- `allowedMemberTypes: ["Application"]` means Entra itself refuses to assign agent roles to users, and refuses to assign `Records.Read.All` to an app. Nobody can give an agent the human read role by accident, because the IdP rejects the assignment.
+- `allowedMemberTypes` separates agent roles (`Application`) from human roles (`User`), so the portal and consent flows steer each to the right kind of principal. **It isn't a hard guarantee** (amendment below): the resource has to enforce the separation itself.
 - App-only tokens carry the granted app roles in the `roles` claim, so the resource can enforce this without calling Graph.
 
 ## Alternatives rejected
 - **One shared role set**: one mis-assignment exposes PII to an agent.
 - **Scopes (delegated permissions)**: agents here run autonomously with no signed-in user. Scopes describe what an app may do *on behalf of a user*, so they're the wrong primitive.
+
+## Amendment (Phase 5, 2026-11-01): `allowedMemberTypes` isn't enforced by Graph
+Seed S9 assigned `Records.Read.All` (`allowedMemberTypes: ["User"]`) to a service principal with `POST /servicePrincipals/{id}/appRoleAssignments`, app-only with `AppRoleAssignment.ReadWrite.All`, and Graph **accepted** it. P4 therefore rests on layers we own, not on the IdP flag:
+1. **The API**: human routes require a user token (`idtyp`/`scp`), so an app holding `Records.Read.All` still gets 403 (unit-tested since Phase 2).
+2. **The registry**: REG-006 rejects any grant of a non-Application role to an NHI.
+3. **The reconciler**: `apply` revokes roles the registry doesn't declare on managed resources.
+4. **Discovery**: NHI-009 flags any NHI holding a User-assignable role (found the seed live).
 
 ## Consequences
 - Redaction is only as good as the API's code, so it gets negative tests (P8): every agent response is asserted to contain no raw PII.

@@ -8,7 +8,9 @@ that's kinder than Entra lets a non-converging reconciler pass:
 * an enabled app role can't be deleted;
 * reading sponsors needs AgentIdentity.ReadWrite.All, which the scanner lacks (403);
 * agent identities have no tags, and appId == id;
-* objects created seconds ago can be "not found" (configurable lag).
+* objects created seconds ago can be "not found" (configurable lag);
+* a new blueprint principal is granted Graph AgentIdentity.CreateAsManager, and that
+  grant can't be deleted (system-managed, Phase 5).
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ import respx
 V1 = "/v1.0/"
 GRAPH_APP_ID = "00000003-0000-0000-c000-000000000000"
 BP_TYPE = "Microsoft.Graph.AgentIdentityBlueprint"
+AUTO_GRANT = "AgentIdentity.CreateAsManager"
 
 
 def _json(data: Any, status: int = 200) -> httpx.Response:
@@ -197,6 +200,11 @@ class FakeTenant:
                 return _error(400, "Request_BadRequest", "blueprint does not exist")
             oid = str(uuid.uuid4())
             self.sps[oid] = {"id": oid, "appId": app_id, "kind": "blueprintPrincipal", "tags": []}
+            # Observed live (Phase 5): Entra grants every new blueprint principal this role.
+            graph = self.sps.get("graph-sp", {})
+            if any(r["value"] == AUTO_GRANT for r in graph.get("appRoles", [])):
+                auto = {"id": f"auto-{oid}", "resourceId": "graph-sp"}
+                self.assignments[oid] = [{**auto, "appRoleId": f"role-{AUTO_GRANT}"}]
             self.writes.append("POST blueprintPrincipal")
             return _json(self.sps[oid], 201)
 
@@ -250,6 +258,9 @@ class FakeTenant:
             return _json(a, 201)
 
         def delete_assignment(request: httpx.Request, oid: str, aid: str) -> httpx.Response:
+            if aid.startswith("auto-"):  # observed live: system-managed, not deletable
+                message = "EntitlementGrants can be updated only through a source."
+                return _error(400, "Request_BadRequest", message)
             self.assignments[oid] = [a for a in self.assignments.get(oid, []) if a["id"] != aid]
             self.writes.append("DELETE appRoleAssignment")
             return httpx.Response(204)

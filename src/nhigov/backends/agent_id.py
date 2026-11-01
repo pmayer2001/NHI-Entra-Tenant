@@ -133,6 +133,8 @@ class AgentIdBackend:
             )
         if not principal:
             plan.steps.append(self._principal_step(bp))
+        else:
+            self._plan_principal_grants(ctx, bp, principal[0]["id"], plan)
         body, notes = credential_notes(ctx, bp.name, app.get("keyCredentials") or [], bp.name)
         plan.notes += notes
         if body:
@@ -147,6 +149,13 @@ class AgentIdBackend:
         return app_id
 
     @staticmethod
+    def _allowed_graph_roles(ctx: PlanContext) -> tuple[str, dict[str, str], set[str]]:
+        graph_sp, roles = ctx.graph_sp()
+        policy = ctx.registry.policy
+        allowed = set(policy.blueprint_graph_grants) if policy else set()
+        return graph_sp, roles, {rid for rid, value in roles.items() if value in allowed}
+
+    @staticmethod
     def _principal_step(bp: DesiredBlueprint) -> Step:
         return Step(
             "blueprint.principal",
@@ -155,6 +164,26 @@ class AgentIdBackend:
             f"POST /v1.0/{BP_PRINCIPALS}",
             {"appId": f"<{bp.name}.appId>"},
         )
+
+    def _plan_principal_grants(
+        self, ctx: PlanContext, bp: DesiredBlueprint, principal: str, plan: IdentityPlan
+    ) -> None:
+        """A blueprint principal holds only the Graph roles policy allows: least privilege for
+        the object whose key reaches all its agents. Entra's own CreateAsManager grant is
+        system-managed (can't be revoked), so policy lists it; anything else is revoked."""
+        graph_sp, roles, keep = self._allowed_graph_roles(ctx)
+        for a in ctx.graph.list_all(f"servicePrincipals/{principal}/appRoleAssignments"):
+            if a.get("resourceId") == graph_sp and a["appRoleId"] not in keep:
+                role = roles.get(a["appRoleId"], a["appRoleId"])
+                plan.steps.append(
+                    Step(
+                        "blueprint.revoke",
+                        bp.agent_id,
+                        f"Graph {role} from the principal of {bp.name} (not in policy)",
+                        f"DELETE /v1.0/servicePrincipals/{principal}/appRoleAssignments/{a['id']}",
+                        {"assignmentId": a["id"], "role": role},
+                    )
+                )
 
     @staticmethod
     def _credential_step(bp: DesiredBlueprint, body: JsonDict) -> Step:

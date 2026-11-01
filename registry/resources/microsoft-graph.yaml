@@ -25,6 +25,7 @@ app_roles:
   - {value: AgentIdentityBlueprint.UpdateAuthProperties.All, member_types: [Application], description: Update blueprint URIs and scopes}
   - {value: AgentIdentityBlueprint.DeleteRestore.All, member_types: [Application], description: Delete and restore blueprints}
   - {value: AgentIdentityBlueprintPrincipal.Create, member_types: [Application], description: Create blueprint principals}
+  - {value: AgentIdentityBlueprintPrincipal.DeleteRestore.All, member_types: [Application], description: Delete and restore blueprint principals}
   - {value: AgentIdentity.Create.All, member_types: [Application], description: Create agent identities}
   - {value: AgentIdentity.EnableDisable.All, member_types: [Application], description: Enable or disable agent identities}
   - {value: AgentIdentity.DeleteRestore.All, member_types: [Application], description: Delete and restore agent identities}

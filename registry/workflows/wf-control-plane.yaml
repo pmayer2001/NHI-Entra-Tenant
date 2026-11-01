@@ -38,6 +38,7 @@ agents:
           - AgentIdentityBlueprint.UpdateAuthProperties.All
           - AgentIdentityBlueprint.DeleteRestore.All
           - AgentIdentityBlueprintPrincipal.Create
+          - AgentIdentityBlueprintPrincipal.DeleteRestore.All
           - AgentIdentity.Create.All
           - AgentIdentity.EnableDisable.All
           - AgentIdentity.DeleteRestore.All

@@ -177,6 +177,13 @@ class Policy(_Strict):
     sponsor_grace_days: int = Field(default=14, ge=0)
     retirement_grace_days: int = Field(default=14, ge=0)
     expiry_notice_days: int = Field(default=14, ge=0)
+    # NHI-011: one credential per runtime (local, github-actions). More widens the set
+    # of places a blueprint key could leak from, and every agent of it with it (ADR-003).
+    max_blueprint_credentials: int = Field(default=2, ge=1)
+    # Microsoft Graph app roles a blueprint principal may keep. Entra grants each new
+    # blueprint principal AgentIdentity.CreateAsManager on its own (observed in Phase 5);
+    # anything not listed here is revoked by `apply` and reported by NHI-007.
+    blueprint_graph_grants: list[RoleValue] = Field(default_factory=list)
     # P9: these identities must be registered like any other NHI.
     control_plane: list[RegistryId] = Field(
         default_factory=lambda: ["nhigov-provisioner", "nhigov-scanner"]
