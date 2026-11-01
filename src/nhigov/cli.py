@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -12,7 +13,7 @@ import typer
 
 from nhigov import __version__
 from nhigov.certs import DEFAULT_CERT_DIR, DEFAULT_LIFETIME_DAYS, generate_self_signed
-from nhigov.config import load_config, load_tenant_domain
+from nhigov.config import Config, load_config, load_tenant_domain
 from nhigov.graph.auth import TokenAcquisitionError, provisioner_token, scanner_token
 from nhigov.graph.client import GraphClient
 from nhigov.probe.checks import READ_CHECKS, Outcome
@@ -24,9 +25,11 @@ from nhigov.probe.runner import (
     run_read_checks,
     run_write_checks,
 )
+from nhigov.reconcile.plan import PlanError, ResourcePlan, apply_plan, plan_resource
 from nhigov.reconcile.resources import desired_application, desired_service_principal
+from nhigov.reconcile.state import STATE_PATH, TenantState, load_state, save_state
 from nhigov.registry.findings import Severity
-from nhigov.registry.loader import PLACEHOLDER_DOMAIN, load_registry
+from nhigov.registry.loader import PLACEHOLDER_DOMAIN, Registry, load_registry
 from nhigov.registry.online import validate_online
 from nhigov.registry.validate import validate_registry
 
@@ -200,7 +203,7 @@ def api_probe(
     app_body = desired_application(resource)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
-        render_resource_probe(answers, app_body, desired_service_principal("<appId>")),
+        render_resource_probe(answers, app_body, desired_service_principal("<appId>", resource.id)),
         encoding="utf-8",
     )
     colors = {Verdict.GO: typer.colors.GREEN, Verdict.WARN: typer.colors.YELLOW}
@@ -243,6 +246,109 @@ def api_serve(
     api = create_app(validator, RecordStore.from_file(), UsageLog(settings.usage_log))
     typer.echo(f"usage log: {settings.usage_log}")
     uvicorn.run(api, host=host, port=port)
+
+
+def _managed_resource_plans(
+    cfg: Config, registry_dir: Path, state: TenantState
+) -> tuple[Registry, list[ResourcePlan]]:
+    registry, findings = load_registry(registry_dir, cfg.tenant_domain or PLACEHOLDER_DOMAIN)
+    findings += validate_registry(registry)
+    if any(f.severity is Severity.ERROR for f in findings):
+        raise typer.BadParameter("the registry has errors; run `nhigov validate` first")
+    with GraphClient(scanner_token(cfg), base_url=cfg.graph.base_url) as scanner:
+        plans = [
+            plan_resource(scanner, res, state) for res in registry.resources.values() if res.managed
+        ]
+    return registry, plans
+
+
+def _print_plans(plans: list[ResourcePlan]) -> None:
+    typer.echo("Scope: resource APIs only (Phase 2). Agents and workflows arrive in Phase 3.\n")
+    for p in plans:
+        if p.is_noop:
+            typer.secho(f"  = {p.resource_id}: no changes", fg=typer.colors.GREEN)
+            continue
+        if p.record is not None:
+            typer.secho(f"  ~ {p.resource_id}: record existing objects in state", fg="yellow")
+        for a in p.actions:
+            mark, color = ("+", typer.colors.GREEN) if a.op == "create" else ("~", "yellow")
+            typer.secho(f"  {mark} {a.op} {a.target} {p.resource_id}", fg=color)
+            typer.echo(f"      {a.method} /v1.0/{a.path}")
+            for change in a.changes:
+                typer.echo(f"      - {change}")
+            if a.op == "create":
+                body = json.dumps(a.body, indent=2).replace("\n", "\n      ")
+                typer.echo(f"      {body}")
+
+
+@app.command()
+def plan(
+    config_path: ConfigOpt = Path("config.yaml"),
+    registry_dir: Annotated[Path, typer.Option("--registry")] = Path("registry"),
+    state_path: Annotated[Path, typer.Option("--state")] = STATE_PATH,
+) -> None:
+    """Show what `apply` would change in the tenant. Read-only (runs as the scanner)."""
+    cfg = load_config(config_path)
+    try:
+        _, plans = _managed_resource_plans(cfg, registry_dir, load_state(state_path))
+    except PlanError as exc:
+        typer.secho(f"Plan refused: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from None
+    _print_plans(plans)
+    pending = sum(not p.is_noop for p in plans)
+    typer.echo(f"\n{pending} resource(s) to change." if pending else "\nNo changes.")
+
+
+@app.command()
+def apply(
+    config_path: ConfigOpt = Path("config.yaml"),
+    registry_dir: Annotated[Path, typer.Option("--registry")] = Path("registry"),
+    state_path: Annotated[Path, typer.Option("--state")] = STATE_PATH,
+    yes: Annotated[bool, typer.Option("--yes", help="Skip the confirmation prompt")] = False,
+) -> None:
+    """Make the tenant match the registry. Re-plans first and asks before writing."""
+    cfg = load_config(config_path)
+    state = load_state(state_path)
+    try:
+        _, plans = _managed_resource_plans(cfg, registry_dir, state)
+    except PlanError as exc:
+        typer.secho(f"Plan refused: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from None
+    _print_plans(plans)
+    todo = [p for p in plans if not p.is_noop]
+    if not todo:
+        typer.echo("\nNo changes.")
+        return
+    typer.echo("\nThese changes are written as nhigov-provisioner.")
+    if not yes:
+        typer.confirm("Apply them to the tenant?", abort=True)
+
+    with GraphClient(provisioner_token(cfg), base_url=cfg.graph.base_url) as prov:
+        for p in todo:
+            for line in apply_plan(prov, p, state, lambda s: save_state(s, state_path)):
+                typer.secho(f"  {line}", fg=typer.colors.GREEN)
+    typer.echo(
+        f"\nState saved to {state_path}. Run `nhigov plan` again: it should show no changes."
+    )
+
+    api = state.resources.get("res-sensitive-records")
+    if api and _set_api_audience(config_path, api.app_id):
+        typer.echo(f"Added sensitive_api.audience to {config_path} for `nhigov api serve`.")
+
+
+def _set_api_audience(config_path: Path, app_id: str) -> bool:
+    """Append the API's audience to config.yaml if it has no sensitive_api section.
+    Appending (not re-dumping) keeps the file's comments intact."""
+    text = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+    if "sensitive_api:" in text:
+        return False
+    block = (
+        "\n# Added by `nhigov apply`: the Sensitive Records API's appId is the `aud` of its\n"
+        "# v2 tokens (ADR-009).\n"
+        f'sensitive_api:\n  audience: "{app_id}"\n  token_version: 2\n'
+    )
+    config_path.write_bytes((text.rstrip("\n") + "\n" + block).encode("utf-8"))
+    return True
 
 
 def run() -> None:

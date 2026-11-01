@@ -13,6 +13,9 @@ secrets/
 
 # Tenant-specific config (tenant ID / client IDs stay out of the public repo)
 config.yaml
+# Holds real object IDs and appIds, so it follows the same rule as config.yaml
+# (CLAUDE.md's layout says "committed"; pending Paul's decision).
+state/tenant-state.json
 
 # Python / tooling
 .venv/

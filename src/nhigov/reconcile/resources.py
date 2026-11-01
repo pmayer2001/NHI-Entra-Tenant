@@ -34,7 +34,7 @@ def desired_application(resource: Resource) -> dict[str, Any]:
         "displayName": resource.id,
         "signInAudience": "AzureADMyOrg",  # single tenant: no other tenant can get tokens for it
         "identifierUris": [resource.identifier_uri],
-        "tags": ["nhigov:managed", f"nhigov:resource={resource.id}"],
+        "tags": managed_tags(resource.id),
         "api": {
             # v2: `aud` is the appId GUID, and custom identifier URIs are exempt from
             # the tenant's identifier URI restriction (ADR-009).
@@ -59,11 +59,17 @@ def desired_application(resource: Resource) -> dict[str, Any]:
     }
 
 
-def desired_service_principal(app_id: str) -> dict[str, Any]:
+def managed_tags(resource_id: str) -> list[str]:
+    return ["nhigov:managed", f"nhigov:resource={resource_id}"]
+
+
+def desired_service_principal(app_id: str, resource_id: str) -> dict[str, Any]:
     return {
         "appId": app_id,
         # Only principals holding one of the API's roles can get a token for it at all:
         # an unassigned client is refused by Entra before it ever reaches the API.
         "appRoleAssignmentRequired": True,
-        "tags": ["nhigov:managed"],
+        # Entra copies the application's tags onto a new SP anyway (observed), and
+        # may add its own, so the reconciler checks these are present, not exact.
+        "tags": managed_tags(resource_id),
     }

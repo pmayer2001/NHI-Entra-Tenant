@@ -55,7 +55,7 @@ def test_unmanaged_resource_is_never_built() -> None:
 
 
 def test_service_principal_requires_assignment() -> None:
-    assert desired_service_principal("x")["appRoleAssignmentRequired"] is True
+    assert desired_service_principal("x", "res-x")["appRoleAssignmentRequired"] is True
 
 
 # ------------------------------------------------------------------ A01 policy evaluation
@@ -178,7 +178,7 @@ def test_report_redacts_ids_but_keeps_planned_body() -> None:
     with GraphClient(lambda: "t", sleep=lambda _: None) as graph:
         answers = run_resource_probe(graph, RESOURCE, TENANT, PROV_APP_ID)
     md = render_resource_probe(
-        answers, desired_application(RESOURCE), desired_service_principal("")
+        answers, desired_application(RESOURCE), desired_service_principal("", RESOURCE.id)
     )
     assert TENANT not in md
     assert role_id(RESOURCE.id, "Records.Annotate") in md  # registry-derived, safe to commit
