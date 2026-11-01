@@ -124,7 +124,8 @@ def test_missing_policy(reg_dir: Path) -> None:
 
 
 def test_unused_agent_is_a_warning_not_an_error(reg_dir: Path) -> None:
-    mutate(reg_dir, CLAIMS, lambda d: d["agents"].pop(1))  # drop agent-router
+    mutate(reg_dir, CLAIMS, lambda d: d["agents"].pop(1))  # drop agent-router everywhere
+    (reg_dir / "workflows" / "wf-sp-backend-demo.yaml").unlink()
     findings = run(reg_dir)
     assert errors(findings) == set()
     assert [(f.rule, f.subject) for f in findings] == [("REG-014", "agent-router")]

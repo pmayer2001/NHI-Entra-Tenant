@@ -18,12 +18,12 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
-from nhigov.graph.client import GraphClient
+from nhigov.graph.client import GraphClient, GraphError
 from nhigov.probe.checks import classify
 from nhigov.probe.report import redact
+from nhigov.reconcile.control_plane import graph_roles_held
 from nhigov.registry.models import Resource
 
-MICROSOFT_GRAPH_APP_ID = "00000003-0000-0000-c000-000000000000"
 CREATE_PERMISSION = "Application.ReadWrite.OwnedBy"  # least privileged for both creates (docs)
 BROADER_THAN_NEEDED = ("Application.ReadWrite.All", "Directory.ReadWrite.All")
 
@@ -157,29 +157,12 @@ def check_name_free(graph: GraphClient, display_name: str) -> Answer:
 
 def check_provisioner_permissions(graph: GraphClient, provisioner_app_id: str) -> Answer:
     q = f"Provisioner holds {CREATE_PERMISSION}"
-    sps, err = _get(
-        graph, "servicePrincipals", {"$filter": f"appId eq '{provisioner_app_id}'", "$select": "id"}
-    )
-    if err or not sps.get("value"):
-        return Answer("A04", q, Verdict.UNKNOWN, err or "provisioner service principal not found")
-    graph_sp, err = _get(
-        graph,
-        "servicePrincipals",
-        {"$filter": f"appId eq '{MICROSOFT_GRAPH_APP_ID}'", "$select": "id,appRoles"},
-    )
-    if err or not graph_sp.get("value"):
-        return Answer("A04", q, Verdict.UNKNOWN, err or "Microsoft Graph SP not found")
-    names: dict[str, str] = {
-        str(r["id"]): str(r["value"]) for r in graph_sp["value"][0].get("appRoles", [])
-    }
-    assignments = list(
-        graph.list_all(f"servicePrincipals/{sps['value'][0]['id']}/appRoleAssignments")
-    )
-    held = sorted(
-        names.get(str(a["appRoleId"]), str(a["appRoleId"]))
-        for a in assignments
-        if a.get("resourceId") == graph_sp["value"][0]["id"]
-    )
+    try:
+        held = graph_roles_held(graph, provisioner_app_id)
+    except GraphError as exc:
+        return Answer("A04", q, Verdict.UNKNOWN, str(exc))
+    if held is None:
+        return Answer("A04", q, Verdict.UNKNOWN, "provisioner or Microsoft Graph SP not found")
     if CREATE_PERMISSION not in held:
         return Answer("A04", q, Verdict.BLOCKED, f"holds: {', '.join(held) or 'nothing'}")
     broader = [p for p in BROADER_THAN_NEEDED if p in held]

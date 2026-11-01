@@ -20,6 +20,7 @@ ADR-001 makes `registry/*.yaml` the source of truth. It's only a control if inva
 | `managed: false` resources | Microsoft Graph is a resource we grant but don't own. Listing its roles lets grants be checked uniformly; the reconciler never edits it. |
 | `exception.covers` | An exception names exactly which high-risk roles it justifies, so adding another high-risk role later fails until it's justified too. A blanket exception would hide that. |
 | `{tenant_domain}` in UPNs | The tenant domain reveals the tenant ID with one public lookup. It's substituted from git-ignored config at load time and never committed. |
+| `backend` on a workflow (Phase 3) | Overrides config's `identity_backend` for one workflow, so the service-principal fallback can be shown live next to Agent ID without giving a pair two NHIs (P3). See ADR-010. |
 | `policy.control_plane` | Names the identities REG-012 requires to be registered in an active workflow (P9). |
 
 ## Alternatives rejected

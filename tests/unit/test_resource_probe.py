@@ -11,12 +11,12 @@ import respx
 
 from nhigov.graph.client import GraphClient
 from nhigov.probe.resource import (
-    MICROSOFT_GRAPH_APP_ID,
     Verdict,
     render_resource_probe,
     run_resource_probe,
     uri_policy_verdict,
 )
+from nhigov.reconcile.control_plane import MICROSOFT_GRAPH_APP_ID
 from nhigov.reconcile.resources import desired_application, desired_service_principal, role_id
 from nhigov.registry.loader import load_registry
 

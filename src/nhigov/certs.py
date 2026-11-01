@@ -11,6 +11,7 @@ Output for a name like "nhigov-scanner":
 
 from __future__ import annotations
 
+import base64
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -78,3 +79,47 @@ def generate_self_signed(
         thumbprint_sha1=cert.fingerprint(hashes.SHA1()).hex().upper(),  # noqa: S303
         not_after=not_after,
     )
+
+
+@dataclass(frozen=True)
+class LocalCert:
+    """The public half of a local certificate, as Entra's keyCredentials wants it."""
+
+    name: str
+    der_b64: str  # `key` in a keyCredential
+    thumbprint_b64: str  # `customKeyIdentifier`: base64 of the SHA-1 thumbprint bytes
+    not_before: datetime
+    not_after: datetime
+
+    @property
+    def lifetime_days(self) -> int:
+        """Whole days of validity. `cert new` backdates not_before by 5 minutes for clock
+        skew, so a 180-day certificate is 180 days and 5 minutes: still 180 here."""
+        return (self.not_after - self.not_before).days
+
+
+def load_local_cert(name: str, cert_dir: Path = DEFAULT_CERT_DIR) -> LocalCert | None:
+    """Read <cert_dir>/<name>.cer, or None if `nhigov cert new <name>` hasn't been run."""
+    path = cert_dir.expanduser() / f"{name}.cer"
+    if not path.exists():
+        return None
+    cert = x509.load_pem_x509_certificate(path.read_bytes())
+    der = cert.public_bytes(serialization.Encoding.DER)
+    return LocalCert(
+        name=name,
+        der_b64=base64.b64encode(der).decode(),
+        thumbprint_b64=base64.b64encode(cert.fingerprint(hashes.SHA1())).decode(),  # noqa: S303
+        not_before=cert.not_valid_before_utc,
+        not_after=cert.not_valid_after_utc,
+    )
+
+
+def key_credential(cert: LocalCert, display_name: str) -> dict[str, str]:
+    """A keyCredential entry. Only the public certificate ever leaves this machine (P7)."""
+    return {
+        "type": "AsymmetricX509Cert",
+        "usage": "Verify",
+        "key": cert.der_b64,
+        "customKeyIdentifier": cert.thumbprint_b64,
+        "displayName": display_name,
+    }

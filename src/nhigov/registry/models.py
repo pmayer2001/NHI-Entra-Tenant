@@ -44,6 +44,13 @@ class IdentityType(StrEnum):
     APPLICATION = "application"
 
 
+class Backend(StrEnum):
+    """How a (workflow, agent) pair is materialized in Entra (ADR-003)."""
+
+    AGENT_ID = "agent_id"  # agent identity under a blueprint
+    SERVICE_PRINCIPAL = "service_principal"  # its own app registration + SP
+
+
 class Runtime(StrEnum):
     LOCAL = "local"
     GITHUB_ACTIONS = "github-actions"
@@ -107,8 +114,9 @@ class AgentDefinition(_Strict):
     id: RegistryId
     description: str
     identity_type: IdentityType = IdentityType.AGENT
-    # Agents sharing a trust zone share a blueprint, and one blueprint credential can
-    # impersonate all of them (ADR-003). Split zones to shrink that blast radius.
+    # Under Agent ID each agent definition gets one blueprint (bp-<id>), and that
+    # blueprint's credential can act as every agent identity created from it (ADR-003).
+    # The zone is recorded for blast-radius findings (NHI-011).
     trust_zone: RegistryId = "default"
     # P5: skills are plain names. They can't carry permissions; a skill runs under the
     # identity of the agent that calls it.
@@ -148,6 +156,9 @@ class Workflow(_Strict):
     review_by: date
     agents: list[WorkflowAgent] = Field(min_length=1)
     exception: RiskException | None = None
+    # Overrides config.yaml's identity_backend for this workflow only, so both
+    # backends can run side by side without giving one pair two NHIs (P3).
+    backend: Backend | None = None
 
     @model_validator(mode="after")
     def _review_before_expiry(self) -> Workflow:

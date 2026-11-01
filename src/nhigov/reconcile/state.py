@@ -21,9 +21,30 @@ class ResourceRecord(BaseModel):
     service_principal_id: str | None = None
 
 
+class BlueprintRecord(BaseModel):
+    """An agent identity blueprint (Agent ID backend), keyed by agent definition ID."""
+
+    application_object_id: str
+    app_id: str
+    principal_id: str | None = None  # the blueprint principal, created after the blueprint
+
+
+class NhiRecord(BaseModel):
+    """One (workflow, agent) NHI, keyed "<workflow>/<agent>"."""
+
+    backend: str  # agent_id | service_principal
+    # The service principal (or agent identity) that holds app role assignments.
+    principal_id: str | None = None
+    app_id: str | None = None
+    application_object_id: str | None = None  # service_principal backend only
+    blueprint: str | None = None  # agent_id backend: the agent definition's blueprint
+
+
 class TenantState(BaseModel):
     version: int = 1
     resources: dict[str, ResourceRecord] = Field(default_factory=dict)
+    blueprints: dict[str, BlueprintRecord] = Field(default_factory=dict)
+    nhis: dict[str, NhiRecord] = Field(default_factory=dict)
 
 
 def load_state(path: Path = STATE_PATH) -> TenantState:

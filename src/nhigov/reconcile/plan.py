@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from nhigov.graph.client import GraphClient, GraphError
+from nhigov.reconcile.engine import PlanError
 from nhigov.reconcile.resources import desired_application, desired_service_principal
 from nhigov.reconcile.state import ResourceRecord, TenantState
 from nhigov.registry.models import Resource
@@ -31,10 +32,6 @@ APP_ID_PLACEHOLDER = "<appId from create>"
 LAG_BACKOFF = (2.0, 4.0, 8.0, 16.0)
 
 JsonDict = dict[str, Any]
-
-
-class PlanError(Exception):
-    """The tenant is in a state the reconciler won't guess its way out of."""
 
 
 @dataclass(frozen=True)

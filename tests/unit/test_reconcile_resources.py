@@ -7,119 +7,22 @@ so a diff that compares naively would never converge.
 
 from __future__ import annotations
 
-import copy
-import json
-import uuid
 from pathlib import Path
-from typing import Any
 
-import httpx
 import pytest
 import respx
+from fake_tenant import FakeTenant
 
 from nhigov.cli import _set_api_audience
 from nhigov.graph.client import GraphClient
-from nhigov.reconcile.plan import PlanError, apply_plan, plan_resource
+from nhigov.reconcile.engine import PlanError
+from nhigov.reconcile.plan import apply_plan, plan_resource
 from nhigov.reconcile.resources import desired_application
 from nhigov.reconcile.state import ResourceRecord, TenantState, load_state, save_state
 from nhigov.registry.loader import load_registry
 
 REGISTRY, _ = load_registry(Path(__file__).parents[2] / "registry")
 RESOURCE = REGISTRY.resources["res-sensitive-records"]
-V1 = "/v1.0/"
-
-
-class FakeTenant:
-    def __init__(self, sp_lag_failures: int = 0) -> None:
-        self.apps: dict[str, dict[str, Any]] = {}
-        self.sps: dict[str, dict[str, Any]] = {}
-        self.sp_lag_failures = sp_lag_failures
-        self.writes: list[str] = []
-
-    # Graph fills in defaults and extra fields the reconciler must tolerate.
-    @staticmethod
-    def _as_graph_returns(app: dict[str, Any]) -> dict[str, Any]:
-        app = copy.deepcopy(app)
-        app.setdefault("tags", [])
-        app["api"] = {
-            "acceptMappedClaims": None, "knownClientApplications": [],
-            "oauth2PermissionScopes": [], "preAuthorizedApplications": [],
-            "requestedAccessTokenVersion": None, **(app.get("api") or {}),
-        }  # fmt: skip
-        for role in app.get("appRoles", []):
-            role["origin"] = "Application"
-        claims = app.get("optionalClaims") or {}
-        app["optionalClaims"] = {
-            "idToken": [], "saml2Token": [],
-            "accessToken": [{**c, "source": None} for c in claims.get("accessToken", [])],
-        }  # fmt: skip
-        return app
-
-    def install(self) -> None:
-        def json_response(data: Any, status: int = 200) -> httpx.Response:
-            return httpx.Response(status, json=data)
-
-        def list_apps(request: httpx.Request) -> httpx.Response:
-            name = request.url.params["$filter"].split("'")[1]
-            found = [a for a in self.apps.values() if a["displayName"] == name]
-            return json_response({"value": found})
-
-        def get_app(request: httpx.Request, oid: str) -> httpx.Response:
-            if oid not in self.apps:
-                return json_response({"error": {"code": "Request_ResourceNotFound"}}, 404)
-            return json_response(self.apps[oid])
-
-        def create_app(request: httpx.Request) -> httpx.Response:
-            body = json.loads(request.content)
-            oid, app_id = str(uuid.uuid4()), str(uuid.uuid4())
-            self.apps[oid] = self._as_graph_returns({**body, "id": oid, "appId": app_id})
-            self.writes.append("POST applications")
-            return json_response(self.apps[oid], 201)
-
-        def patch_app(request: httpx.Request, oid: str) -> httpx.Response:
-            body = json.loads(request.content)
-            roles = body.get("appRoles")
-            if roles is not None:
-                kept = {r["id"] for r in roles}
-                for r in self.apps[oid]["appRoles"]:
-                    if r["id"] not in kept and r["isEnabled"]:
-                        return json_response({"error": {"code": "CannotDeleteEnabledRole"}}, 400)
-            self.apps[oid] = self._as_graph_returns({**self.apps[oid], **body})
-            self.writes.append("PATCH applications")
-            return httpx.Response(204)
-
-        def list_sps(request: httpx.Request) -> httpx.Response:
-            app_id = request.url.params["$filter"].split("'")[1]
-            return json_response({"value": [s for s in self.sps.values() if s["appId"] == app_id]})
-
-        def create_sp(request: httpx.Request) -> httpx.Response:
-            if self.sp_lag_failures:
-                self.sp_lag_failures -= 1
-                return json_response({"error": {"code": "Authorization_RequestDenied"}}, 403)
-            body = json.loads(request.content)
-            oid = str(uuid.uuid4())
-            # Observed on the live tenant: Entra gives a new SP its application's tags,
-            # whatever tags the request sent. A portal-created SP also gets this one.
-            app = next(a for a in self.apps.values() if a["appId"] == body["appId"])
-            tags = [*app.get("tags", []), "WindowsAzureActiveDirectoryIntegratedApp"]
-            self.sps[oid] = {"appRoleAssignmentRequired": False, **body, "tags": tags, "id": oid}
-            self.writes.append("POST servicePrincipals")
-            return json_response(self.sps[oid], 201)
-
-        def patch_sp(request: httpx.Request, oid: str) -> httpx.Response:
-            self.sps[oid].update(json.loads(request.content))
-            self.writes.append("PATCH servicePrincipals")
-            return httpx.Response(204)
-
-        respx.get(path__regex=rf"^{V1}applications$").mock(side_effect=list_apps)
-        respx.post(path__regex=rf"^{V1}applications$").mock(side_effect=create_app)
-        respx.get(path__regex=rf"^{V1}applications/(?P<oid>[^/]+)$").mock(side_effect=get_app)
-        respx.patch(path__regex=rf"^{V1}applications/(?P<oid>[^/]+)$").mock(side_effect=patch_app)
-        respx.get(path__regex=rf"^{V1}servicePrincipals$").mock(side_effect=list_sps)
-        respx.post(path__regex=rf"^{V1}servicePrincipals$").mock(side_effect=create_sp)
-        respx.patch(path__regex=rf"^{V1}servicePrincipals/(?P<oid>[^/]+)$").mock(
-            side_effect=patch_sp
-        )
 
 
 def _graph() -> GraphClient:

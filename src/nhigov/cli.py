@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated
@@ -27,11 +28,14 @@ from nhigov.probe.runner import (
     run_read_checks,
     run_write_checks,
 )
-from nhigov.reconcile.plan import PlanError, ResourcePlan, apply_plan, plan_resource
+from nhigov.reconcile.engine import IdentityPlan, PlanContext, PlanError, apply_steps
+from nhigov.reconcile.identities import plan_identities
+from nhigov.reconcile.plan import ResourcePlan, apply_plan, plan_resource
 from nhigov.reconcile.resources import desired_application, desired_service_principal
 from nhigov.reconcile.state import STATE_PATH, TenantState, load_state, save_state
 from nhigov.registry.findings import Severity
-from nhigov.registry.loader import PLACEHOLDER_DOMAIN, Registry, load_registry
+from nhigov.registry.loader import PLACEHOLDER_DOMAIN, load_registry
+from nhigov.registry.models import Backend
 from nhigov.registry.online import validate_online
 from nhigov.registry.validate import validate_registry
 
@@ -288,23 +292,47 @@ def api_serve(
     uvicorn.run(api, host=host, port=port)
 
 
-def _managed_resource_plans(
-    cfg: Config, registry_dir: Path, state: TenantState
-) -> tuple[Registry, list[ResourcePlan]]:
+@dataclass
+class FullPlan:
+    resources: list[ResourcePlan]
+    identities: IdentityPlan
+
+    @property
+    def is_noop(self) -> bool:
+        return all(p.is_noop for p in self.resources) and not self.identities.steps
+
+
+def _build_plan(cfg: Config, registry_dir: Path, state: TenantState) -> FullPlan:
     registry, findings = load_registry(registry_dir, cfg.tenant_domain or PLACEHOLDER_DOMAIN)
     findings += validate_registry(registry)
     if any(f.severity is Severity.ERROR for f in findings):
         raise typer.BadParameter("the registry has errors; run `nhigov validate` first")
     with GraphClient(scanner_token(cfg), base_url=cfg.graph.base_url) as scanner:
-        plans = [
+        resources = [
             plan_resource(scanner, res, state) for res in registry.resources.values() if res.managed
         ]
-    return registry, plans
+        ctx = PlanContext(graph=scanner, registry=registry, state=state, today=date.today())
+        identities = plan_identities(
+            ctx,
+            Backend(cfg.identity_backend.value),
+            {
+                "nhigov-scanner": cfg.control_plane.scanner.client_id,
+                "nhigov-provisioner": cfg.control_plane.provisioner.client_id,
+            },
+        )
+    return FullPlan(resources, identities)
 
 
-def _print_plans(plans: list[ResourcePlan]) -> None:
-    typer.echo("Scope: resource APIs only (Phase 2). Agents and workflows arrive in Phase 3.\n")
-    for p in plans:
+_MARKS = {
+    "create": ("+", "green"), "principal": ("+", "green"), "credential": ("+", "green"),
+    "add": ("+", "green"), "adopt": ("~", "yellow"), "update": ("~", "yellow"),
+    "enable": ("~", "yellow"), "disable": ("-", "red"), "revoke": ("-", "red"),
+}  # fmt: skip
+
+
+def _print_plan(plan: FullPlan) -> None:
+    typer.echo("Resources")
+    for p in plan.resources:
         if p.is_noop:
             typer.secho(f"  = {p.resource_id}: no changes", fg=typer.colors.GREEN)
             continue
@@ -320,6 +348,30 @@ def _print_plans(plans: list[ResourcePlan]) -> None:
                 body = json.dumps(a.body, indent=2).replace("\n", "\n      ")
                 typer.echo(f"      {body}")
 
+    typer.echo("\nIdentities (blueprints, agent identities, service principals, role grants)")
+    if not plan.identities.steps:
+        typer.secho("  = no changes", fg=typer.colors.GREEN)
+    for s in plan.identities.steps:
+        mark, color = _MARKS.get(s.op, ("~", "yellow"))
+        verb = "record in state" if s.op == "adopt" else s.op
+        typer.secho(f"  {mark} {verb}: {s.summary}", fg=color)
+        typer.echo(f"      {s.request}")
+        for change in s.changes:
+            typer.echo(f"      - {change}")
+
+    if plan.identities.notes:
+        typer.echo("\nNotes (report-only; plan won't act on these)")
+        for note in plan.identities.notes:
+            typer.secho(f"  ! {redact(note)}", fg=typer.colors.YELLOW)
+
+
+def _plan_or_exit(cfg: Config, registry_dir: Path, state: TenantState) -> FullPlan:
+    try:
+        return _build_plan(cfg, registry_dir, state)
+    except PlanError as exc:
+        typer.secho(f"Plan refused: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from None
+
 
 @app.command()
 def plan(
@@ -328,15 +380,13 @@ def plan(
     state_path: Annotated[Path, typer.Option("--state")] = STATE_PATH,
 ) -> None:
     """Show what `apply` would change in the tenant. Read-only (runs as the scanner)."""
-    cfg = load_config(config_path)
-    try:
-        _, plans = _managed_resource_plans(cfg, registry_dir, load_state(state_path))
-    except PlanError as exc:
-        typer.secho(f"Plan refused: {exc}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(1) from None
-    _print_plans(plans)
-    pending = sum(not p.is_noop for p in plans)
-    typer.echo(f"\n{pending} resource(s) to change." if pending else "\nNo changes.")
+    full = _plan_or_exit(load_config(config_path), registry_dir, load_state(state_path))
+    _print_plan(full)
+    if full.is_noop:
+        typer.echo("\nNo changes.")
+    else:
+        count = sum(len(p.actions) for p in full.resources) + len(full.identities.steps)
+        typer.echo(f"\n{count} change(s) planned. Nothing has been written.")
 
 
 @app.command()
@@ -349,24 +399,26 @@ def apply(
     """Make the tenant match the registry. Re-plans first and asks before writing."""
     cfg = load_config(config_path)
     state = load_state(state_path)
-    try:
-        _, plans = _managed_resource_plans(cfg, registry_dir, state)
-    except PlanError as exc:
-        typer.secho(f"Plan refused: {exc}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(1) from None
-    _print_plans(plans)
-    todo = [p for p in plans if not p.is_noop]
-    if not todo:
+    full = _plan_or_exit(cfg, registry_dir, state)
+    _print_plan(full)
+    if full.is_noop:
         typer.echo("\nNo changes.")
         return
     typer.echo("\nThese changes are written as nhigov-provisioner.")
     if not yes:
         typer.confirm("Apply them to the tenant?", abort=True)
 
+    def save(s: TenantState) -> None:
+        save_state(s, state_path)
+
     with GraphClient(provisioner_token(cfg), base_url=cfg.graph.base_url) as prov:
-        for p in todo:
-            for line in apply_plan(prov, p, state, lambda s: save_state(s, state_path)):
-                typer.secho(f"  {line}", fg=typer.colors.GREEN)
+        # Resources first: grants need the API's service principal to exist.
+        for p in full.resources:
+            if not p.is_noop:
+                for line in apply_plan(prov, p, state, save):
+                    typer.secho(f"  {line}", fg=typer.colors.GREEN)
+        for line in apply_steps(prov, full.identities.steps, state, save):
+            typer.secho(f"  {line}", fg=typer.colors.GREEN)
     typer.echo(
         f"\nState saved to {state_path}. Run `nhigov plan` again: it should show no changes."
     )
