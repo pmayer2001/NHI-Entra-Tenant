@@ -1,0 +1,30 @@
+# Microsoft Graph: we don't own it (managed: false), so the reconciler never
+# edits it. Only the application permissions this registry grants are listed,
+# so grants can be checked like any other role.
+kind: Resource
+id: microsoft-graph
+identifier_uri: https://graph.microsoft.com
+data_classification: restricted   # the directory itself
+managed: false
+app_roles:
+  # read-only (scanner)
+  - {value: Application.Read.All, member_types: [Application], description: Read all apps}
+  - {value: Directory.Read.All, member_types: [Application], description: Read directory data}
+  - {value: RoleManagement.Read.Directory, member_types: [Application], description: Read directory role assignments}
+  - {value: User.Read.All, member_types: [Application], description: Read all users}
+  - {value: AuditLog.Read.All, member_types: [Application], description: Read audit and sign-in logs}
+  - {value: AgentIdentityBlueprint.Read.All, member_types: [Application], description: Read agent identity blueprints}
+  - {value: AgentIdentity.Read.All, member_types: [Application], description: Read agent identities}
+  - {value: Policy.Read.All, member_types: [Application], description: Read tenant policies}
+  # write (provisioner; ADR-005)
+  - {value: Application.ReadWrite.OwnedBy, member_types: [Application], description: Manage apps this app owns}
+  - {value: AppRoleAssignment.ReadWrite.All, member_types: [Application], description: Grant app roles to any principal}
+  - {value: Policy.ReadWrite.ApplicationConfiguration, member_types: [Application], description: Write app management policies}
+  - {value: AgentIdentityBlueprint.Create, member_types: [Application], description: Create blueprints}
+  - {value: AgentIdentityBlueprint.AddRemoveCreds.All, member_types: [Application], description: Manage blueprint credentials}
+  - {value: AgentIdentityBlueprint.UpdateAuthProperties.All, member_types: [Application], description: Update blueprint URIs and scopes}
+  - {value: AgentIdentityBlueprint.DeleteRestore.All, member_types: [Application], description: Delete and restore blueprints}
+  - {value: AgentIdentityBlueprintPrincipal.Create, member_types: [Application], description: Create blueprint principals}
+  - {value: AgentIdentity.Create.All, member_types: [Application], description: Create agent identities}
+  - {value: AgentIdentity.EnableDisable.All, member_types: [Application], description: Enable or disable agent identities}
+  - {value: AgentIdentity.DeleteRestore.All, member_types: [Application], description: Delete and restore agent identities}

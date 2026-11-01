@@ -1,0 +1,19 @@
+# The mock Sensitive Records API (Phase 2). Human and agent roles are separate
+# sets: Entra refuses to assign a role to a member type not listed here (P4, ADR-004).
+kind: Resource
+id: res-sensitive-records
+identifier_uri: api://nhigov-sensitive-records
+data_classification: restricted
+app_roles:
+  - value: Records.Read.All
+    member_types: [User]
+    description: Full read for authorized humans
+  - value: Records.Read.Redacted
+    member_types: [Application]
+    description: Read records with PII fields redacted
+  - value: Records.Read.Metadata
+    member_types: [Application]
+    description: Read IDs, timestamps, status only
+  - value: Records.Annotate
+    member_types: [Application]
+    description: Append a triage note; cannot modify fields

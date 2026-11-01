@@ -1,0 +1,22 @@
+kind: Workflow
+id: wf-claims-triage
+name: Claims triage automation
+business_owner: paul@{tenant_domain}   # filled in from config.yaml at load time
+sponsor: paul@{tenant_domain}
+data_classification: restricted
+status: active                 # requested | active | suspended | retired
+expires: 2027-03-31
+review_by: 2027-01-31
+agents:
+  - ref: agent-summarizer
+    runtimes: [local, github-actions]
+    expected_cadence: daily    # used by dormancy rules to avoid false positives
+    permissions:
+      - resource: res-sensitive-records
+        app_roles: [Records.Read.Redacted]
+  - ref: agent-router
+    runtimes: [local]
+    expected_cadence: daily
+    permissions:
+      - resource: res-sensitive-records
+        app_roles: [Records.Read.Metadata, Records.Annotate]

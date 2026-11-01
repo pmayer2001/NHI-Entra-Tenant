@@ -1,0 +1,7 @@
+kind: AgentDefinition
+id: agent-summarizer
+description: Summarizes record notes for triage
+skills: [summarize-text, classify-priority]   # P5: skills carry no permissions
+max_permissions:                              # the most this agent type may ever be granted
+  - resource: res-sensitive-records
+    app_roles: [Records.Read.Redacted, Records.Read.Metadata]

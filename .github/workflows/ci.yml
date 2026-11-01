@@ -19,6 +19,7 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run mypy --strict src/
       - run: uv run pytest tests/unit
+      - run: uv run nhigov validate   # offline registry check; a bad registry fails the PR
 
   secret-scan:
     runs-on: ubuntu-latest

@@ -1,0 +1,18 @@
+# Control plane (P9): reads the tenant for discovery, plan and online validation.
+# A classic app registration, not an agent identity: it isn't AI, and it needs Graph.
+kind: AgentDefinition
+id: nhigov-scanner
+description: Read-only discovery scanner and plan reader (ADR-005)
+identity_type: application
+trust_zone: control-plane
+max_permissions:
+  - resource: microsoft-graph
+    app_roles:
+      - Application.Read.All
+      - Directory.Read.All
+      - RoleManagement.Read.Directory
+      - User.Read.All
+      - AuditLog.Read.All
+      - AgentIdentityBlueprint.Read.All
+      - AgentIdentity.Read.All
+      - Policy.Read.All

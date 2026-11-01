@@ -1,0 +1,54 @@
+# P9: the governance tooling is governed too. Registered like any workflow, so
+# discovery treats these apps as managed and flags drift on them (NHI-007).
+kind: Workflow
+id: wf-control-plane
+name: NHI governance tooling (nhigov)
+business_owner: paul@{tenant_domain}
+sponsor: paul@{tenant_domain}
+data_classification: restricted
+status: active
+expires: 2027-04-30
+review_by: 2027-01-31
+agents:
+  - ref: nhigov-scanner
+    runtimes: [local, github-actions]   # nightly scan in CI (Phase 8)
+    expected_cadence: daily
+    permissions:
+      - resource: microsoft-graph
+        app_roles:
+          - Application.Read.All
+          - Directory.Read.All
+          - RoleManagement.Read.Directory
+          - User.Read.All
+          - AuditLog.Read.All
+          - AgentIdentityBlueprint.Read.All
+          - AgentIdentity.Read.All
+          - Policy.Read.All
+  - ref: nhigov-provisioner
+    runtimes: [local]                   # never in CI: its key stays on Paul's machine
+    expected_cadence: on-demand
+    permissions:
+      - resource: microsoft-graph
+        app_roles:
+          - Application.ReadWrite.OwnedBy
+          - AppRoleAssignment.ReadWrite.All
+          - Policy.ReadWrite.ApplicationConfiguration
+          - AgentIdentityBlueprint.Create
+          - AgentIdentityBlueprint.AddRemoveCreds.All
+          - AgentIdentityBlueprint.UpdateAuthProperties.All
+          - AgentIdentityBlueprint.DeleteRestore.All
+          - AgentIdentityBlueprintPrincipal.Create
+          - AgentIdentity.Create.All
+          - AgentIdentity.EnableDisable.All
+          - AgentIdentity.DeleteRestore.All
+exception:
+  reason: >-
+    The provisioner must assign app roles to NHIs (AppRoleAssignment.ReadWrite.All)
+    and set the tenant app management policy that blocks client secrets
+    (Policy.ReadWrite.ApplicationConfiguration). Mitigations in ADR-005: key only on
+    Paul's machine, never in CI, own grants watched by discovery (NHI-005).
+  approved_by: paul@{tenant_domain}
+  expires: 2027-01-31        # re-justify at the next review
+  covers:
+    - AppRoleAssignment.ReadWrite.All
+    - Policy.ReadWrite.ApplicationConfiguration

@@ -12,7 +12,7 @@ import typer
 
 from nhigov import __version__
 from nhigov.certs import DEFAULT_CERT_DIR, DEFAULT_LIFETIME_DAYS, generate_self_signed
-from nhigov.config import load_config
+from nhigov.config import load_config, load_tenant_domain
 from nhigov.graph.auth import TokenAcquisitionError, provisioner_token, scanner_token
 from nhigov.graph.client import GraphClient
 from nhigov.probe.checks import READ_CHECKS, Outcome
@@ -23,6 +23,10 @@ from nhigov.probe.runner import (
     run_read_checks,
     run_write_checks,
 )
+from nhigov.registry.findings import Severity
+from nhigov.registry.loader import PLACEHOLDER_DOMAIN, load_registry
+from nhigov.registry.online import validate_online
+from nhigov.registry.validate import validate_registry
 
 app = typer.Typer(no_args_is_help=True, help="NHI governance for agentic workflows (Entra ID).")
 cert_app = typer.Typer(no_args_is_help=True, help="Local certificate credentials (P7: no secrets).")
@@ -133,6 +137,42 @@ def probe(
             err=True,
         )
         raise typer.Exit(2)
+
+
+@app.command()
+def validate(
+    registry_dir: Annotated[Path, typer.Option("--registry", help="Registry folder")] = Path(
+        "registry"
+    ),
+    config_path: ConfigOpt = Path("config.yaml"),
+    online: Annotated[
+        bool, typer.Option("--online", help="Also check sponsors/owners exist (read-only)")
+    ] = False,
+) -> None:
+    """Validate the registry (CLAUDE.md section 6). Exits 1 if there are errors."""
+    domain = load_tenant_domain(config_path)
+    if online and not domain:
+        raise typer.BadParameter("--online needs tenant_domain in config.yaml")
+    registry, findings = load_registry(registry_dir, domain or PLACEHOLDER_DOMAIN)
+    findings += validate_registry(registry)
+    if online:
+        cfg = load_config(config_path)
+        with GraphClient(scanner_token(cfg), base_url=cfg.graph.base_url) as scanner:
+            findings += validate_online(registry, scanner)
+
+    typer.echo(f"registry: {registry.summary()}")
+    for f in sorted(findings, key=lambda f: (f.severity != Severity.ERROR, f.rule, f.subject)):
+        source = registry.sources.get(f.subject)
+        where = f"  ({source.as_posix()})" if source else ""
+        color = typer.colors.RED if f.severity is Severity.ERROR else typer.colors.YELLOW
+        typer.secho(f"{f.severity.upper():<8}{f.rule}  {f.subject}: {f.message}{where}", fg=color)
+
+    errors = sum(f.severity is Severity.ERROR for f in findings)
+    warnings = len(findings) - errors
+    if errors:
+        typer.secho(f"invalid: {errors} error(s), {warnings} warning(s)", fg=typer.colors.RED)
+        raise typer.Exit(1)
+    typer.secho(f"valid: 0 errors, {warnings} warning(s)", fg=typer.colors.GREEN)
 
 
 def run() -> None:

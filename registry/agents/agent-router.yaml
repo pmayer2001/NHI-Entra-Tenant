@@ -1,0 +1,7 @@
+kind: AgentDefinition
+id: agent-router
+description: Routes records to a queue using rules and leaves a triage note
+skills: [route-by-rules]
+max_permissions:
+  - resource: res-sensitive-records
+    app_roles: [Records.Read.Metadata, Records.Annotate]

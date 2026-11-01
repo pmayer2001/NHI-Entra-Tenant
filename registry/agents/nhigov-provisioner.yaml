@@ -1,0 +1,21 @@
+# Control plane (P9): the only identity that writes to the tenant (apply,
+# lifecycle). The most privileged NHI here; see the exception in wf-control-plane.
+kind: AgentDefinition
+id: nhigov-provisioner
+description: Applies reconciler plans and lifecycle actions (ADR-005, ADR-006)
+identity_type: application
+trust_zone: control-plane
+max_permissions:
+  - resource: microsoft-graph
+    app_roles:
+      - Application.ReadWrite.OwnedBy
+      - AppRoleAssignment.ReadWrite.All
+      - Policy.ReadWrite.ApplicationConfiguration
+      - AgentIdentityBlueprint.Create
+      - AgentIdentityBlueprint.AddRemoveCreds.All
+      - AgentIdentityBlueprint.UpdateAuthProperties.All
+      - AgentIdentityBlueprint.DeleteRestore.All
+      - AgentIdentityBlueprintPrincipal.Create
+      - AgentIdentity.Create.All
+      - AgentIdentity.EnableDisable.All
+      - AgentIdentity.DeleteRestore.All

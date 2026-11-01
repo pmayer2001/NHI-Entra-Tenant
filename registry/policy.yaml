@@ -1,0 +1,31 @@
+# Global governance rules. Validated by `nhigov validate`; enforced by the
+# reconciler (Phase 3), discovery (Phase 5) and lifecycle (Phase 6).
+kind: Policy
+
+# Graph application permissions that can escalate privilege or touch data
+# tenant-wide. Granting one needs an `exception:` block with a reason and an
+# expiry (REG-010), and discovery flags any NHI holding one (NHI-005).
+high_risk_permissions:
+  - AppRoleAssignment.ReadWrite.All        # can grant any app any permission, including itself
+  - RoleManagement.ReadWrite.Directory     # can assign directory roles (e.g. Global Admin)
+  - Application.ReadWrite.All              # can add credentials to any app, then sign in as it
+  - Directory.ReadWrite.All
+  - Policy.ReadWrite.ApplicationConfiguration  # tenant-wide credential policy
+  - Policy.ReadWrite.ConditionalAccess
+  - User.ReadWrite.All
+  - Group.ReadWrite.All
+  - Mail.ReadWrite
+  - Mail.Send
+  - Files.ReadWrite.All
+  - Sites.FullControl.All
+  - AgentIdentity.ReadWrite.All
+  - AgentIdentityBlueprint.ReadWrite.All
+
+max_workflow_lifetime_days: 365     # expires at most 12 months out (P6)
+max_credential_lifetime_days: 180   # matches the app management policy cap (§8)
+sponsor_grace_days: 14              # sponsor disabled -> NHI disabled after this (§8)
+retirement_grace_days: 14           # retired -> soft-deleted after this
+expiry_notice_days: 14              # "expiring" state starts this long before expires
+
+# P9: the governance tooling must itself be registered.
+control_plane: [nhigov-provisioner, nhigov-scanner]

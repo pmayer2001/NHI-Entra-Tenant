@@ -3,6 +3,7 @@
 # which is how GitHub Actions will supply them.
 
 tenant_id: "00000000-0000-0000-0000-000000000000"          # NHIGOV_TENANT_ID
+tenant_domain: "yourtenant.onmicrosoft.com"           # NHIGOV_TENANT_DOMAIN
 
 # Chosen from the Phase 0 probe results (ADR-003): agent_id | service_principal
 identity_backend: service_principal                         # NHIGOV_IDENTITY_BACKEND
