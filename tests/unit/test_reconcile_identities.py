@@ -28,6 +28,7 @@ REGISTRY, _ = load_registry(Path(__file__).parents[2] / "registry")
 RESOURCE = REGISTRY.resources["res-sensitive-records"]
 TODAY = date(2026, 11, 1)
 SPONSOR = "paul@tenant.example"  # the loader's offline placeholder domain
+DEPARTING = "test-departing-sponsor@tenant.example"  # wf-lifecycle-test (Phase 6)
 CLIENTS = {"nhigov-scanner": "scanner-app", "nhigov-provisioner": "provisioner-app"}
 SUMMARIZER = "wf-claims-triage/agent-summarizer"
 ROUTER = "wf-claims-triage/agent-router"
@@ -51,6 +52,7 @@ def cert_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def tenant(**kwargs: int) -> FakeTenant:
     t = FakeTenant(**kwargs)
     t.add_user(SPONSOR)
+    t.add_user(DEPARTING)
     scanner, provisioner = (
         _control_plane_roles("nhigov-scanner"),
         _control_plane_roles("nhigov-provisioner"),
@@ -102,7 +104,7 @@ def kinds(p: IdentityPlan) -> list[tuple[str, str]]:
 def test_desired_maps_registry_to_backends() -> None:
     d = build_desired(REGISTRY, Backend.AGENT_ID)
     assert set(d.blueprints) == {"agent-summarizer", "agent-router"}
-    assert d.blueprints["agent-router"].sponsor_upns == (SPONSOR,)
+    assert d.blueprints["agent-router"].sponsor_upns == (SPONSOR, DEPARTING)
     assert d.nhis[DEMO].backend is Backend.SERVICE_PRINCIPAL  # per-workflow override
     assert d.nhis[ROUTER].backend is Backend.AGENT_ID
     assert d.nhis[ROUTER].name == "nhi-wf-claims-triage-agent-router"
@@ -124,9 +126,9 @@ def test_first_plan_creates_in_dependency_order(cert_dir: Path) -> None:
     assert order.index("blueprint.principal") < order.index("agent.create")
     assert order.index("agent.create") < order.index("grant.add")
     assert order.count("blueprint.credential") == 2
-    assert order.count("agent.create") == 2
+    assert order.count("agent.create") == 3  # claims triage x2, lifecycle test
     assert order.count("spnhi.create") == 1
-    assert order.count("grant.add") == 4  # summarizer 1, router 2, demo router 1
+    assert order.count("grant.add") == 5  # summarizer 1, router 2, demo 1, lifecycle 1
 
 
 @respx.mock
@@ -198,7 +200,8 @@ def test_suspend_disables_and_reactivate_enables(cert_dir: Path) -> None:
     p = plan(state, cert_dir, suspended)
     assert sorted(kinds(p)) == [("agent.disable", ROUTER), ("agent.disable", SUMMARIZER)]
     apply(state, cert_dir, suspended)
-    assert all(a["accountEnabled"] is False for a in t.agents())
+    claims = [a for a in t.agents() if a["displayName"].startswith("nhi-wf-claims-triage-")]
+    assert len(claims) == 2 and all(a["accountEnabled"] is False for a in claims)
     assert plan(state, cert_dir, suspended).steps == []
 
     p = plan(state, cert_dir)  # back to active
@@ -211,7 +214,8 @@ def test_requested_workflow_creates_nothing(cert_dir: Path) -> None:
     requested = with_workflow(REGISTRY, "wf-claims-triage", status=WorkflowStatus.REQUESTED)
     p = plan(TenantState(), cert_dir, requested)
     assert not any(k.startswith("wf-claims-triage/") for _, k in kinds(p))
-    assert not any(kind.startswith("blueprint.") for kind, _ in kinds(p))
+    # agent-summarizer is only used by claims triage, so its blueprint isn't created
+    assert not any(k.startswith("blueprint.") and key == "agent-summarizer" for k, key in kinds(p))
 
 
 # ------------------------------------------------------------------ refusing to guess

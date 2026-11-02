@@ -29,6 +29,7 @@ from nhigov.agent_auth import (
 )
 from nhigov.agents.identity import acquire_token, credentials_for
 from nhigov.config import Config, load_config
+from nhigov.lifecycle.state import load_lifecycle
 from nhigov.reconcile.desired import DesiredNhi, build_desired
 from nhigov.reconcile.state import TenantState, load_state
 from nhigov.registry.loader import load_registry
@@ -55,10 +56,14 @@ CROSS_BLUEPRINT = 7002134
 RECORDS: list[dict[str, Any]] = json.loads(DEFAULT_DATA.read_text(encoding="utf-8"))
 PII_VALUES = {str(r[f]) for r in RECORDS for f in PII}
 
-# Which NHIs to test: every enabled (workflow, agent) pair in the registry.
+# Which NHIs to test: every enabled (workflow, agent) pair in the registry. NHIs the
+# lifecycle engine has disabled (holds) get the opposite test: Entra must refuse them.
 _REGISTRY, _ = load_registry(Path("registry"))
-_DESIRED = build_desired(_REGISTRY, Backend.AGENT_ID)
+_DESIRED = build_desired(_REGISTRY, Backend.AGENT_ID, load_lifecycle().holds())
 NHIS = sorted(k for k, n in _DESIRED.nhis.items() if n.should_be_enabled)
+HELD = sorted(k for k, n in _DESIRED.nhis.items() if n.hold)
+# "Application '...' is disabled."
+DISABLED_APP = 7000112
 
 
 @dataclass
@@ -168,6 +173,17 @@ def test_usage_log_attributes_the_call_to_the_nhi(live: Live, key: str) -> None:
     assert mine, "no allowed call logged for this NHI"
     assert mine[-1]["role_used"] in granted(key)
     assert mine[-1]["appid"] == rec.app_id
+
+
+# ------------------------------------------------------------------ lifecycle (ADR-012)
+
+
+@pytest.mark.parametrize("key", HELD)
+def test_an_nhi_disabled_by_the_lifecycle_gets_no_token(live: Live, key: str) -> None:
+    """Disabling is enforced by Entra at the token endpoint, not just recorded by us."""
+    with httpx.Client(timeout=30.0) as http, pytest.raises(TokenError) as refused:
+        acquire_token(http, live.cfg.tenant_id, credentials_for(key, live.state), live.scope)
+    assert DISABLED_APP in refused.value.codes
 
 
 # ------------------------------------------------------------------ blast radius (ADR-003)

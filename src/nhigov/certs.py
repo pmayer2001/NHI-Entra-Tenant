@@ -50,14 +50,17 @@ def generate_self_signed(
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
     now = datetime.now(UTC)
-    not_after = now + timedelta(days=lifetime_days)
+    # Backdate 5 minutes for clock skew, and count the lifetime from there: a policy
+    # capping certificates at 180 days rejects one valid for 180 days and 5 minutes.
+    not_before = now - timedelta(minutes=5)
+    not_after = not_before + timedelta(days=lifetime_days)
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)
         .issuer_name(subject)  # self-signed: Entra pins this exact cert, no CA chain needed
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(now - timedelta(minutes=5))
+        .not_valid_before(not_before)
         .not_valid_after(not_after)
         .sign(key, hashes.SHA256())
     )

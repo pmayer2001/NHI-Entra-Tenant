@@ -41,6 +41,8 @@ class DesiredNhi:
     status: WorkflowStatus
     sponsor_upn: str
     grants: tuple[Grant, ...]
+    # A lifecycle hold (sponsor left, expired): keep it disabled even if `active`.
+    hold: str | None = None
 
     @property
     def key(self) -> str:
@@ -57,7 +59,7 @@ class DesiredNhi:
 
     @property
     def should_be_enabled(self) -> bool:
-        return self.status is WorkflowStatus.ACTIVE
+        return self.status is WorkflowStatus.ACTIVE and self.hold is None
 
 
 @dataclass(frozen=True)
@@ -73,7 +75,9 @@ class Desired:
     control_plane: list[ControlPlaneGrants] = field(default_factory=list)
 
 
-def build_desired(registry: Registry, default_backend: Backend) -> Desired:
+def build_desired(
+    registry: Registry, default_backend: Backend, holds: dict[str, str] | None = None
+) -> Desired:
     desired = Desired()
     blueprint_sponsors: dict[str, set[str]] = {}
     for wf in registry.workflows.values():
@@ -93,6 +97,7 @@ def build_desired(registry: Registry, default_backend: Backend) -> Desired:
                 grants=tuple(
                     sorted(Grant(p.resource, r) for p in wa.permissions for r in p.app_roles)
                 ),
+                hold=(holds or {}).get(f"{wf.id}/{agent.id}"),
             )
             desired.nhis[nhi.key] = nhi
             if backend is Backend.AGENT_ID and nhi.should_exist:

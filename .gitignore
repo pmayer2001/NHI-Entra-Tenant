@@ -16,6 +16,7 @@ config.yaml
 # Holds real object IDs and appIds, so it follows the same rule as config.yaml.
 # Decided 2026-10-31: kept local, never committed.
 state/tenant-state.json
+state/lifecycle.json
 
 # Python / tooling
 .venv/

@@ -15,10 +15,16 @@ BACKENDS: tuple[IdentityBackend, ...] = (AgentIdBackend(), ServicePrincipalBacke
 
 
 def plan_identities(
-    ctx: PlanContext, default_backend: Backend, control_plane_client_ids: dict[str, str]
+    ctx: PlanContext,
+    default_backend: Backend,
+    control_plane_client_ids: dict[str, str],
+    holds: dict[str, str] | None = None,
 ) -> IdentityPlan:
-    desired = build_desired(ctx.registry, default_backend)
+    desired = build_desired(ctx.registry, default_backend, holds)
     plan = IdentityPlan()
+    for nhi in desired.nhis.values():
+        if nhi.hold:
+            plan.notes.append(f"{nhi.name}: held disabled by lifecycle ({nhi.hold})")
     principals: Principals = {}
     for backend in BACKENDS:
         principals |= backend.plan(ctx, desired, plan)

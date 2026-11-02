@@ -43,6 +43,15 @@ Not on `policy.high_risk_permissions`. Declared in `wf-control-plane.yaml`, so t
 **Not proposed:** `AgentIdentity.ReadWrite.All`. If `EnableDisable.All` doesn't allow setting `tags`, ADR-006 falls back to the state file plus naming convention rather than widening the provisioner.
 **Still provisional:** `AgentIdentity.Create.All`. W03 succeeded *with* it, so we don't yet know whether ownership alone would suffice.
 
+### Amendment (2026-11-01): `Policy.Read.All`, approved by Paul, applied, then **reverted**
+| Permission | Needed for | Evidence |
+|---|---|---|
+| `Policy.Read.All` | `GET`/`PATCH /policies/defaultAppManagementPolicy` (`nhigov lifecycle policy`, which blocks client secrets tenant-wide, P7) | With only the documented `Policy.ReadWrite.ApplicationConfiguration` in its token, the provisioner got 403 `Authorization_RequestDenied` on both the read (Phase 0, and again in Phase 6 on v1.0 and beta) and the write. Once `Policy.Read.All` showed up in its token (a few minutes after consent), the read returned 200. |
+
+Read-only, and the scanner already holds it, so the provisioner's write reach doesn't change. It's outside §14.3's list, so it's recorded here and declared in `wf-control-plane.yaml`. The Learn pages list only `Policy.ReadWrite.ApplicationConfiguration` for app-only access (checked 2026-11-01).
+
+**Reverted (2026-11-01, Paul's decision).** The grant fixed the read but not the write: a Global Administrator got the same 403 on the PATCH, so the write is most likely licence-gated on the free tenant (ADR-012). With no write to support, the provisioner doesn't need to read the policy. `nhigov lifecycle policy` already reads it as the scanner. Removed from the registry; the grant is revoked in the tenant. If a tenant can write the policy, re-test whether the provisioner needs `Policy.Read.All` for the PATCH.
+
 ### Read through the scanner, write through the provisioner
 `plan` uses the scanner, for example to resolve sponsor UPNs to object IDs. Only `apply` uses the provisioner. So the provisioner never needs `User.Read*`, and a bug in `plan` can't write.
 

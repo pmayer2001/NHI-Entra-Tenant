@@ -115,7 +115,10 @@ class PlanContext:
         found = {o["id"] for o in response.json().get("value", [])}
         expected = {self.user_id(u) for u in expected_upns}
         if found != expected:
-            return f"{label}: sponsors differ from the registry (changing them is a Phase 6 action)"
+            return (
+                f"{label}: sponsors differ from the registry "
+                "(nhigov sets sponsors only when it creates an object)"
+            )
         return None
 
 

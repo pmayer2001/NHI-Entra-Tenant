@@ -163,15 +163,26 @@ class Planter:
         # S1: a client secret. Its value comes back once in the response and is dropped here.
         app_id, sp = self.app_and_sp("seed-secret-app")
         end = (datetime.now(UTC) + timedelta(days=6)).isoformat()
-        response = send(
-            self.prov,
-            "POST",
-            f"applications/{app_id}/addPassword",
-            {"passwordCredential": {"displayName": "seed (6 days)", "endDateTime": end}},
-        )
+        try:
+            response = send(
+                self.prov,
+                "POST",
+                f"applications/{app_id}/addPassword",
+                {"passwordCredential": {"displayName": "seed (6 days)", "endDateTime": end}},
+            )
+        except GraphError as exc:
+            # Phase 6: the tenant app management policy blocks new secrets. That's P7
+            # prevented rather than detected, so there's no NHI-003 to find.
+            self.s.evidence["S1"] = f"secret refused by policy: {exc.status} {exc.code}"
+            self.expect("001 002", sp, "seed-secret-app")
+            typer.echo(f"  S1 secret: {self.s.evidence['S1']}")
+            response = {}
+        else:
+            self.expect("003", sp, "seed-secret-app")
         response.pop("secretText", None)
         del response
-        self.expect("001 002 003", sp, "seed-secret-app")
+        if "S1" not in self.s.evidence:
+            self.expect("001 002", sp, "seed-secret-app")
 
         # S2: a certificate valid for two years (policy: 180 days).
         _, sp = self.app_and_sp("seed-longcert-app", keyCredentials=[public_cert("seed", 730)])

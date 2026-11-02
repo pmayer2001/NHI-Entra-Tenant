@@ -126,6 +126,7 @@ def test_missing_policy(reg_dir: Path) -> None:
 def test_unused_agent_is_a_warning_not_an_error(reg_dir: Path) -> None:
     mutate(reg_dir, CLAIMS, lambda d: d["agents"].pop(1))  # drop agent-router everywhere
     (reg_dir / "workflows" / "wf-sp-backend-demo.yaml").unlink()
+    (reg_dir / "workflows" / "wf-lifecycle-test.yaml").unlink()
     findings = run(reg_dir)
     assert errors(findings) == set()
     assert [(f.rule, f.subject) for f in findings] == [("REG-014", "agent-router")]
@@ -166,9 +167,10 @@ def test_online_flags_missing_disabled_and_guest_people(reg_dir: Path) -> None:
     respx.get(f"{GRAPH_USERS}off@contoso.example").respond(
         json={"accountEnabled": False, "userType": "Member"}
     )
-    respx.get(f"{GRAPH_USERS}paul@contoso.example").respond(
-        json={"accountEnabled": True, "userType": "Member"}
-    )
+    for ok in ("paul", "test-departing-sponsor"):
+        respx.get(f"{GRAPH_USERS}{ok}@contoso.example").respond(
+            json={"accountEnabled": True, "userType": "Member"}
+        )
     registry, _ = load_registry(reg_dir, "contoso.example")
     with GraphClient(lambda: "t", sleep=lambda _: None) as graph:
         found = {(f.severity, f.message.split()[-1]) for f in validate_online(registry, graph)}

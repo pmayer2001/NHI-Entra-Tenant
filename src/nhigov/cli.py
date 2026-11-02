@@ -19,12 +19,14 @@ from nhigov.agent_auth import TokenError, unverified_claims
 from nhigov.agents.identity import NotProvisioned, acquire_token, credentials_for
 from nhigov.agents.stubs import STUBS
 from nhigov.certs import DEFAULT_CERT_DIR, DEFAULT_LIFETIME_DAYS, generate_self_signed
+from nhigov.cli_lifecycle import lifecycle_app
 from nhigov.config import Config, load_config, load_tenant_domain
 from nhigov.discovery.inventory import Inventory
 from nhigov.discovery.report import write_reports
 from nhigov.discovery.scan import collect_inventory, evaluate
 from nhigov.graph.auth import TokenAcquisitionError, provisioner_token, scanner_token
 from nhigov.graph.client import GraphClient, GraphError
+from nhigov.lifecycle.state import load_lifecycle
 from nhigov.probe.checks import READ_CHECKS, Outcome
 from nhigov.probe.gate import NOT_ASSIGNED, check_gate
 from nhigov.probe.report import redact, render_matrix
@@ -51,6 +53,7 @@ cert_app = typer.Typer(no_args_is_help=True, help="Local certificate credentials
 app.add_typer(cert_app, name="cert")
 agent_app = typer.Typer(no_args_is_help=True, help="Run the deterministic agent stubs (Phase 4).")
 app.add_typer(agent_app, name="agent")
+app.add_typer(lifecycle_app, name="lifecycle")
 api_app = typer.Typer(no_args_is_help=True, help="The mock Sensitive Records API (Phase 2).")
 app.add_typer(api_app, name="api")
 
@@ -328,6 +331,7 @@ def _build_plan(cfg: Config, registry_dir: Path, state: TenantState) -> FullPlan
                 "nhigov-scanner": cfg.control_plane.scanner.client_id,
                 "nhigov-provisioner": cfg.control_plane.provisioner.client_id,
             },
+            load_lifecycle().holds(),
         )
     return FullPlan(resources, identities)
 

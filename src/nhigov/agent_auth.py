@@ -52,11 +52,7 @@ def client_assertion(pem_path: Path, client_id: str, tenant_id: str) -> str:
     The `x5t#S256` header is the certificate's SHA-256 thumbprint: it's how Entra
     finds which of the app's uploaded keyCredentials to verify the signature with.
     """
-    pem = pem_path.read_bytes()
-    key = serialization.load_pem_private_key(pem, password=None)
-    if not isinstance(key, rsa.RSAPrivateKey):
-        raise TypeError("expected an RSA private key")
-    cert = x509.load_pem_x509_certificate(pem)
+    key, cert = _load(pem_path)
     header = {
         "alg": "RS256",
         "typ": "JWT",
@@ -72,11 +68,47 @@ def client_assertion(pem_path: Path, client_id: str, tenant_id: str) -> str:
         "nbf": now,
         "exp": now + 600,
     }
+    return _sign(key, header, claims)
+
+
+def _load(pem_path: Path) -> tuple[rsa.RSAPrivateKey, x509.Certificate]:
+    pem = pem_path.read_bytes()
+    key = serialization.load_pem_private_key(pem, password=None)
+    if not isinstance(key, rsa.RSAPrivateKey):
+        raise TypeError("expected an RSA private key")
+    return key, x509.load_pem_x509_certificate(pem)
+
+
+def _sign(key: rsa.RSAPrivateKey, header: dict[str, Any], claims: dict[str, Any]) -> str:
+    # base64url without "=" padding: Graph rejects padded proofs (MissingOrMalformed).
     signing_input = ".".join(
         _b64url(json.dumps(part, separators=(",", ":")).encode()) for part in (header, claims)
     )
     signature = key.sign(signing_input.encode(), padding.PKCS1v15(), hashes.SHA256())
     return f"{signing_input}.{_b64url(signature)}"
+
+
+POP_AUDIENCE = "00000002-0000-0000-c000-000000000000"
+
+
+def proof_of_possession(pem_path: Path, application_object_id: str) -> str:
+    """The `proof` for addKey/removeKey: a JWT signed with a key the app *already* has.
+
+    Only someone holding a currently valid private key can add the next one, which
+    is what makes key rolling safe to automate (Graph docs, "rollkey proof token").
+    `iss` is the application's *object* ID, not its appId.
+    """
+    key, cert = _load(pem_path)
+    header = {
+        "alg": "RS256",
+        "typ": "JWT",
+        "x5t": _b64url(cert.fingerprint(hashes.SHA1())),  # noqa: S303 (identifier, not security)
+        "kid": cert.fingerprint(hashes.SHA1()).hex().upper(),  # noqa: S303
+    }
+    now = int(time.time())
+    # Same claims as Microsoft's sample (its JsonWebTokenHandler adds iat).
+    return _sign(key, header, {"aud": POP_AUDIENCE, "iss": application_object_id,
+                               "iat": now, "nbf": now, "exp": now + 600})  # fmt: skip
 
 
 def request_token(http: httpx.Client, tenant_id: str, form: dict[str, str]) -> str:
