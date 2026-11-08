@@ -73,6 +73,8 @@ class DesiredNhi:
 class ControlPlaneGrants:
     agent_id: str
     graph_roles: tuple[str, ...]
+    workflow_id: str = "wf-control-plane"
+    in_github: bool = False  # runtimes include github-actions: expects one federated credential
 
 
 @dataclass
@@ -93,7 +95,11 @@ def build_desired(
             agent = registry.agents[wa.ref]
             if agent.identity_type is IdentityType.APPLICATION:
                 roles = tuple(sorted(r for p in wa.permissions for r in p.app_roles))
-                desired.control_plane.append(ControlPlaneGrants(agent.id, roles))
+                desired.control_plane.append(
+                    ControlPlaneGrants(
+                        agent.id, roles, wf.id, Runtime.GITHUB_ACTIONS in wa.runtimes
+                    )
+                )
                 continue
             nhi = DesiredNhi(
                 workflow_id=wf.id,

@@ -409,6 +409,47 @@ def _fics(t: FakeTenant, name: str) -> list[dict[str, object]]:
     return t.fics.get(app["id"], [])
 
 
+GH_SUBJECT = "repo:octo@1/nhigov@2:environment:wf-control-plane"
+
+
+def _cp_fic(subject: str, name: str = "gh-wf-control-plane") -> dict[str, object]:
+    return {"id": name, "name": name, "subject": subject,
+            "issuer": "https://token.actions.githubusercontent.com",
+            "audiences": ["api://AzureADTokenExchange"]}  # fmt: skip
+
+
+@respx.mock
+def test_control_plane_federated_credentials_are_checked_not_managed(cert_dir: Path) -> None:
+    # The scanner runs in GitHub (registry runtimes), so it should hold exactly the
+    # credential nhigov would create; the provisioner runs only locally, so none.
+    t = tenant()
+    t.fics["app-scanner-sp"] = [_cp_fic(GH_SUBJECT)]
+    p = plan(TenantState(), cert_dir, repo="octo@1/nhigov@2")
+    assert "nhigov-scanner: federated credential gh-wf-control-plane matches" in p.notes
+    assert not any("nhigov-provisioner" in n and "federated" in n for n in p.notes)
+    assert not any(s.key.startswith("wf-control-plane") for s in p.steps)  # report-only
+
+
+@respx.mock
+def test_a_subject_with_a_stray_newline_is_shown(cert_dir: Path) -> None:
+    # Observed live: a subject pasted with a trailing newline is stored as-is and never
+    # matches; the portal doesn't show it, so the note uses repr().
+    t = tenant()
+    t.fics["app-scanner-sp"] = [_cp_fic(GH_SUBJECT + "\n")]
+    notes = "\n".join(plan(TenantState(), cert_dir, repo="octo@1/nhigov@2").notes)
+    assert "gh-wf-control-plane doesn't match" in notes
+    assert repr(GH_SUBJECT + "\n") in notes
+
+
+@respx.mock
+def test_missing_and_undeclared_control_plane_credentials_are_reported(cert_dir: Path) -> None:
+    t = tenant()
+    t.fics["app-provisioner-sp"] = [_cp_fic("repo:octo/nhigov:ref:refs/heads/main", "ci")]
+    notes = "\n".join(plan(TenantState(), cert_dir, repo="octo@1/nhigov@2").notes)
+    assert "nhigov-scanner: runs in GitHub Actions but has no federated credential" in notes
+    assert "nhigov-provisioner: undeclared federated credential 'ci'" in notes
+
+
 @respx.mock
 def test_github_runtime_gets_a_federated_credential_on_the_blueprint(cert_dir: Path) -> None:
     # wf-claims-triage's summarizer lists github-actions; the credential goes on the

@@ -73,6 +73,8 @@ class FakeTenant:
 
     def add_client(self, sp_id: str, app_id: str, graph_roles: list[str]) -> None:
         self.sps[sp_id] = {"id": sp_id, "appId": app_id, "kind": "sp", "tags": []}
+        # Its app registration, where hand-added federated credentials live.
+        self.apps[f"app-{sp_id}"] = {"id": f"app-{sp_id}", "appId": app_id, "displayName": app_id}
         self.assignments[sp_id] = [
             {"id": f"a-{sp_id}-{r}", "resourceId": "graph-sp", "appRoleId": f"role-{r}"}
             for r in graph_roles
@@ -127,7 +129,8 @@ class FakeTenant:
         # applications ------------------------------------------------
         def list_apps(request: httpx.Request) -> httpx.Response:
             name = _name_filter(request)
-            return _json({"value": [a for a in self.apps.values() if a["displayName"] == name]})
+            field = "appId" if request.url.params["$filter"].startswith("appId") else "displayName"
+            return _json({"value": [a for a in self.apps.values() if a[field] == name]})
 
         def list_blueprints(request: httpx.Request) -> httpx.Response:
             name = _name_filter(request)

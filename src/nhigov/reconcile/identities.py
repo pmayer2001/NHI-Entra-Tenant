@@ -29,5 +29,7 @@ def plan_identities(
     for backend in BACKENDS:
         principals |= backend.plan(ctx, desired, plan)
     plan_grants(ctx, desired, principals, plan)
-    plan.notes += control_plane_notes(ctx.graph, desired.control_plane, control_plane_client_ids)
+    plan.notes += control_plane_notes(
+        ctx.graph, desired.control_plane, control_plane_client_ids, ctx.github_subject_repo
+    )
     return plan
