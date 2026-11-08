@@ -3,9 +3,12 @@
 A federated credential says "trust a token from this issuer, with exactly this
 subject, as a sign-in for this app". GitHub issues each job an OIDC token whose
 `sub` names the repo and, for jobs bound to an environment, the environment:
-`repo:<owner>/<repo>:environment:<name>`. nhigov names environments after
-workflows, so a credential bound to `environment:wf-claims-triage` admits only
-jobs running in that environment, and no secret exists anywhere.
+`repo:<owner>@<owner_id>/<repo>@<repo_id>:environment:<name>` (repos created since
+mid-2026; the numeric IDs survive renames and can't be reclaimed by someone who
+re-registers a deleted name) or `repo:<owner>/<repo>:environment:<name>` (older).
+nhigov names environments after workflows, so a credential bound to
+`environment:wf-claims-triage` admits only jobs running in that environment, and
+no secret exists anywhere.
 
 Where the credential goes follows ADR-003: on the *blueprint* for Agent ID (the
 agent identity has no credentials of its own), on the NHI's own app registration
@@ -27,7 +30,7 @@ PREFIX = "gh-"
 @dataclass(frozen=True)
 class WantedFic:
     workflow_id: str
-    repository: str
+    subject_repo: str  # GitHubSettings.subject_repo
 
     @property
     def name(self) -> str:
@@ -35,7 +38,7 @@ class WantedFic:
 
     @property
     def subject(self) -> str:
-        return f"repo:{self.repository}:environment:{self.workflow_id}"
+        return f"repo:{self.subject_repo}:environment:{self.workflow_id}"
 
     def body(self) -> JsonDict:
         return {
@@ -66,13 +69,13 @@ def plan_fics(
     workflows: list[str],
 ) -> None:
     """Add missing `gh-*` credentials, replace changed ones, remove ones no longer wanted."""
-    if workflows and not ctx.github_repository:
+    if workflows and not ctx.github_subject_repo:
         plan.notes.append(
             f"{label}: {', '.join(workflows)} run in GitHub Actions, but config has no "
             "github.repository; no federated credential planned"
         )
         return
-    wanted = {w.name: w for w in (WantedFic(wf, ctx.github_repository or "") for wf in workflows)}
+    wanted = {w.name: w for w in (WantedFic(wf, ctx.github_subject_repo or "") for wf in workflows)}
     existing = ctx.graph.list_all(path) if path else []
     for fic in existing:
         name = fic.get("name") or ""

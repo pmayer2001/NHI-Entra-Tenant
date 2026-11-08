@@ -56,7 +56,7 @@ def vars_cmd(
                     "NHIGOV_PROVISIONER_CLIENT_ID": cp.provisioner.client_id,
                     STATE_ENV: state.model_dump_json(),
                 }
-                fic = WantedFic(wf.id, cfg.github.repository)
+                fic = WantedFic(wf.id, cfg.github.subject_repo or cfg.github.repository)
                 manual.append(
                     f"{wa.ref}: add a federated credential by hand (Certificates & secrets > "
                     f"Federated credentials > Other issuer): issuer {GITHUB_ISSUER}, "
@@ -78,6 +78,13 @@ def vars_cmd(
                     env[f"{prefix}_BLUEPRINT_APP_ID"] = bp.app_id
 
     typer.echo(f"Repository: {cfg.github.repository}")
+    if not cfg.github.immutable:
+        typer.secho(
+            "! github.owner_id / github.repository_id aren't set: credentials use the name-only "
+            "subject, which repos created since mid-2026 don't send (AADSTS700213). Get both "
+            f"from https://api.github.com/repos/{cfg.github.repository} (id, owner.id).",
+            fg="yellow",
+        )
     typer.echo("Create each environment under Settings > Environments, then add these variables")
     typer.echo("(Variables, not Secrets: none of them is a credential).\n")
     for name, values in envs.items():

@@ -32,6 +32,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+        with:
+          prune-cache: false   # post-job `uv cache prune` exits 2 with uv 0.13; no cache is kept anyway
       - run: uv sync --locked --python 3.12
 
       - name: Start the Sensitive Records API on localhost

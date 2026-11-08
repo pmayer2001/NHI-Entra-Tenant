@@ -26,6 +26,11 @@ sensitive_api:
 
 # The GitHub repo whose Actions environments may sign in as NHIs (federated credentials).
 # Each workflow that lists `github-actions` in an agent's runtimes is trusted from the
-# environment named after the workflow: repo:<repository>:environment:<workflow id>.
+# environment named after the workflow. Repos created since mid-2026 send the subject
+# repo:<owner>@<owner_id>/<repo>@<repository_id>:environment:<workflow id>; set both IDs
+# (public: https://api.github.com/repos/<owner>/<repo> -> owner.id, id). Without them the
+# name-only subject repo:<owner>/<repo>:... is used, which only older repos send.
 github:
   repository: "your-github-user/your-repo"                  # NHIGOV_GITHUB_REPOSITORY
+  owner_id: 12345678                                        # NHIGOV_GITHUB_OWNER_ID
+  repository_id: 123456789                                  # NHIGOV_GITHUB_REPOSITORY_ID

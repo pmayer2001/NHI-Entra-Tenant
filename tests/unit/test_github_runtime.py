@@ -13,7 +13,8 @@ from typer.testing import CliRunner
 from nhigov.agent_auth import EXCHANGE_AUDIENCE, GitHubOidcUnavailable, github_oidc_token
 from nhigov.agents.identity import NotProvisioned, acquire_token, credentials_from_env
 from nhigov.cli import app
-from nhigov.config import load_config
+from nhigov.config import GitHubSettings, load_config
+from nhigov.reconcile.federated import WantedFic
 from nhigov.reconcile.state import STATE_ENV, TenantState, load_state
 
 TENANT = "tenant-x"
@@ -107,3 +108,27 @@ def test_an_agent_may_only_run_where_the_registry_says(
     )
     assert result.exit_code != 0
     assert "github-actions as a runtime" in result.output
+
+
+def test_new_repos_are_trusted_by_their_immutable_ids() -> None:
+    # Repos created since mid-2026 send repo:<owner>@<id>/<repo>@<id>:...; a credential
+    # with the name-only subject is refused (AADSTS700213, observed live).
+    gh = GitHubSettings(repository="octo/nhigov", owner_id=11, repository_id=22)
+    assert gh.subject_repo == "octo@11/nhigov@22"
+    assert WantedFic("wf-x", gh.subject_repo).subject == "repo:octo@11/nhigov@22:environment:wf-x"
+    # Without both IDs: the older name-only form.
+    assert GitHubSettings(repository="octo/nhigov", owner_id=11).subject_repo == "octo/nhigov"
+    assert GitHubSettings().subject_repo is None
+
+
+def test_github_ids_can_come_from_the_environment(tmp_path: Path) -> None:
+    cfg = load_config(
+        tmp_path / "none.yaml",
+        {
+            "NHIGOV_TENANT_ID": "t",
+            "NHIGOV_GITHUB_REPOSITORY": "octo/nhigov",
+            "NHIGOV_GITHUB_OWNER_ID": "11",
+            "NHIGOV_GITHUB_REPOSITORY_ID": "22",
+        },
+    )
+    assert cfg.github.subject_repo == "octo@11/nhigov@22"

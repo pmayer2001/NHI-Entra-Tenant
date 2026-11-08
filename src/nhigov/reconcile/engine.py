@@ -61,7 +61,7 @@ class PlanContext:
     state: TenantState
     today: date
     cert_dir: Path = DEFAULT_CERT_DIR
-    github_repository: str | None = None  # "owner/name" for federated credentials
+    github_subject_repo: str | None = None  # GitHubSettings.subject_repo
     _user_ids: dict[str, str] = field(default_factory=dict)
     _graph_sp: tuple[str, dict[str, str]] | None = None
 
@@ -132,15 +132,23 @@ def send(
     path: str,
     body: JsonDict | None = None,
     sleep: Callable[[float], None] = time.sleep,
+    *,
+    conflict_is_lag: bool = False,
 ) -> JsonDict:
     """One write that tolerates replication lag: a parent created seconds ago can
-    show up as 403, 404, or a 400 saying it doesn't exist."""
+    show up as 403, 404, or a 400 saying it doesn't exist. With `conflict_is_lag`,
+    a 409 is retried too: a name freed by a delete seconds ago can still be taken."""
     for delay in (*LAG_BACKOFF, None):
         response = graph.request(method, path, json=body, check=False)
         if response.is_success:
             return response.json() if response.content else {}
-        lag = response.status_code in (403, 404) or (
-            response.status_code == 400 and any(m in response.text.lower() for m in _LAG_MESSAGES)
+        lag = (
+            response.status_code in (403, 404)
+            or (response.status_code == 409 and conflict_is_lag)
+            or (
+                response.status_code == 400
+                and any(m in response.text.lower() for m in _LAG_MESSAGES)
+            )
         )
         if not lag or delay is None:
             raise GraphError.from_response(response)
@@ -212,7 +220,10 @@ def _fic_path(kind: str, key: str, st: TenantState) -> str:
 
 
 def _fic_add(g: GraphClient, s: Step, st: TenantState, sl: Any) -> str:
-    send(g, "POST", _fic_path(s.kind, s.key, st), s.body, sl)
+    # A changed subject is planned as remove-then-add under the same name. Right after
+    # the delete, Entra can still refuse the name with 409
+    # Request_MultipleObjectsWithSameKeyValue (observed live), so retry with backoff.
+    send(g, "POST", _fic_path(s.kind, s.key, st), s.body, sl, conflict_is_lag=True)
     return f"added federated credential {s.body['name']} ({s.body['subject']})"
 
 

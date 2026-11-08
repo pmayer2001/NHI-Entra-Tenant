@@ -44,12 +44,17 @@ def _name_filter(request: httpx.Request) -> str:
 
 
 class FakeTenant:
-    def __init__(self, sp_lag_failures: int = 0, agent_lag_failures: int = 0) -> None:
+    def __init__(
+        self, sp_lag_failures: int = 0, agent_lag_failures: int = 0, fic_name_lag: int = 0
+    ) -> None:
         self.apps: dict[str, dict[str, Any]] = {}
         self.sps: dict[str, dict[str, Any]] = {}
         self.assignments: dict[str, list[dict[str, Any]]] = {}
         self.fics: dict[str, list[dict[str, Any]]] = {}  # application object ID -> FICs
         self.users: dict[str, str] = {}
+        # A deleted credential's name stays taken for this many POSTs (replication lag).
+        self.fic_name_lag = fic_name_lag
+        self.fic_names_lagging: dict[str, int] = {}
         self.sp_lag_failures = sp_lag_failures
         self.agent_lag_failures = agent_lag_failures
         self.writes: list[str] = []
@@ -255,6 +260,9 @@ class FakeTenant:
             if oid not in self.apps:
                 return _error(404, "Request_ResourceNotFound")
             body = json.loads(request.content)
+            if self.fic_names_lagging.get(body["name"], 0) > 0:
+                self.fic_names_lagging[body["name"]] -= 1
+                return _error(409, "Request_MultipleObjectsWithSameKeyValue")
             if any(f["name"] == body["name"] for f in self.fics.get(oid, [])):
                 return _error(409, "Request_MultipleObjectsWithSameKeyValue")
             fic = {"id": str(uuid.uuid4()), **body}
@@ -263,6 +271,9 @@ class FakeTenant:
             return _json(fic, 201)
 
         def delete_fic(request: httpx.Request, oid: str, fid: str) -> httpx.Response:
+            for f in self.fics.get(oid, []):
+                if f["id"] == fid:
+                    self.fic_names_lagging[f["name"]] = self.fic_name_lag
             self.fics[oid] = [f for f in self.fics.get(oid, []) if f["id"] != fid]
             self.writes.append("DELETE federatedIdentityCredential")
             return httpx.Response(204)

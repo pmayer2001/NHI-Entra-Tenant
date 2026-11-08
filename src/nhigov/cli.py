@@ -337,7 +337,7 @@ def _build_plan(cfg: Config, registry_dir: Path, state: TenantState) -> FullPlan
             registry=registry,
             state=state,
             today=date.today(),
-            github_repository=cfg.github.repository,
+            github_subject_repo=cfg.github.subject_repo,
         )
         identities = plan_identities(
             ctx,

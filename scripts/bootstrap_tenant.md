@@ -58,8 +58,8 @@ Follow `docs/spikes/agent-id-token-spike.md` if probe W01–W03 are OK.
 - [X] Update ADR-003's status to *Accepted* with the chosen backend.
 
 ## 9. GitHub Actions (optional: agents and the nightly scan in CI, no secrets)
-- [ ] Create the GitHub repository and set `github.repository: owner/name` in `config.yaml`.
+- [ ] Create the GitHub repository and set `github.repository: owner/name` in `config.yaml`, plus `github.owner_id` and `github.repository_id` (`id` and `owner.id` from `https://api.github.com/repos/<owner>/<repo>`). New repositories put these immutable IDs in the OIDC subject; without them Entra refuses the token with AADSTS700213.
 - [ ] `uv run nhigov plan`, then `uv run nhigov apply`: adds a federated credential `gh-<workflow>` to the blueprint (or app) of every agent whose `runtimes` include `github-actions` (ADR-014).
 - [ ] `uv run nhigov ci vars`: lists the GitHub environments to create (Settings > Environments, one per workflow, e.g. `wf-claims-triage`) and the **variables** (not secrets) each needs.
-- [ ] Scanner (nightly scan): the control plane isn't managed by `apply`, so add its federated credential by hand: Entra admin center > App registrations > `nhigov-scanner` > Certificates & secrets > Federated credentials > Add > *Other issuer*, with the issuer, subject and name `nhigov ci vars` prints.
+- [ ] Scanner (nightly scan): the control plane isn't managed by `apply`, so add its federated credential by hand: Entra admin center > App registrations > `nhigov-scanner` > Certificates & secrets > Federated credentials > Add > *Other issuer*, with the issuer, subject and name `nhigov ci vars` prints. Use *Other issuer* rather than the GitHub scenario so the subject is exactly the immutable one.
 - [ ] Actions > run `agent: wf-claims-triage / agent-summarizer`. The log should show `GitHub OIDC (federated credential)` and the agent's token roles.

@@ -43,10 +43,34 @@ class GraphSettings(BaseModel):
 
 
 class GitHubSettings(BaseModel):
-    """Where the GitHub Actions runtime lives. Federated credentials trust exactly
-    `repo:<repository>:environment:<workflow id>`, so this must match the real repo."""
+    """Where the GitHub Actions runtime lives (ADR-014).
+
+    Federated credentials trust exactly the `sub` claim of the job's OIDC token.
+    Repositories created since mid-2026 put immutable numeric IDs in it:
+    `repo:<owner>@<owner_id>/<repo>@<repository_id>:environment:<workflow id>`. With
+    both IDs set, nhigov uses that form; without them, the older name-only form
+    (`repo:<owner>/<repo>:...`), which only older repos that haven't opted in send.
+    The IDs are public: `GET https://api.github.com/repos/<owner>/<repo>` returns
+    `id` and `owner.id`.
+    """
 
     repository: str | None = None  # "owner/name"
+    owner_id: int | None = None
+    repository_id: int | None = None
+
+    @property
+    def immutable(self) -> bool:
+        return self.owner_id is not None and self.repository_id is not None
+
+    @property
+    def subject_repo(self) -> str | None:
+        """The repository part of the OIDC subject, between `repo:` and `:environment`."""
+        if not self.repository:
+            return None
+        if not self.immutable:
+            return self.repository
+        owner, _, name = self.repository.partition("/")
+        return f"{owner}@{self.owner_id}/{name}@{self.repository_id}"
 
 
 class SensitiveApiConfig(BaseModel):
@@ -89,6 +113,8 @@ _ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "NHIGOV_API_AUDIENCE": ("sensitive_api", "audience"),
     "NHIGOV_API_TOKEN_VERSION": ("sensitive_api", "token_version"),
     "NHIGOV_GITHUB_REPOSITORY": ("github", "repository"),
+    "NHIGOV_GITHUB_OWNER_ID": ("github", "owner_id"),
+    "NHIGOV_GITHUB_REPOSITORY_ID": ("github", "repository_id"),
 }
 
 

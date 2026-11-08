@@ -75,7 +75,7 @@ def plan(
 ) -> IdentityPlan:
     with _graph() as g:
         ctx = PlanContext(graph=g, registry=registry, state=state, today=TODAY, cert_dir=cert_dir,
-                          github_repository=repo)  # fmt: skip
+                          github_subject_repo=repo)  # fmt: skip
         return plan_identities(ctx, Backend.AGENT_ID, CLIENTS)
 
 
@@ -438,7 +438,9 @@ def test_a_suspended_workflow_loses_its_github_sign_in(cert_dir: Path) -> None:
 
 @respx.mock
 def test_a_renamed_repo_replaces_the_credential(cert_dir: Path) -> None:
-    t = tenant()
+    # Remove, then add under the same name; Entra can refuse the freed name for a few
+    # seconds (409, observed live), so the add retries instead of stopping apply.
+    t = tenant(fic_name_lag=2)
     state = TenantState()
     apply(state, cert_dir, repo=REPO)
     p = apply(state, cert_dir, repo="octo/renamed")
