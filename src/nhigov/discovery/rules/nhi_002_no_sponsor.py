@@ -6,6 +6,7 @@ from collections.abc import Iterator
 
 from nhigov.discovery.inventory import Inventory, Nhi
 from nhigov.discovery.rules.base import Rule, ScanContext, Severity
+from nhigov.registry.models import WorkflowStatus
 
 
 def check(inv: Inventory, ctx: ScanContext) -> Iterator[tuple[Nhi, str]]:
@@ -13,6 +14,12 @@ def check(inv: Inventory, ctx: ScanContext) -> Iterator[tuple[Nhi, str]]:
         if not nhi.tenant_owned or nhi.kind == "resource":
             continue  # resources hold no credentials and can't act on their own
         pairs = ctx.workflow_of(nhi)
+        if (
+            nhi.enabled is False
+            and pairs
+            and all(wf.status is WorkflowStatus.RETIRED for wf, _ in pairs)
+        ):
+            continue  # retired and off: the lifecycle is deleting it; nobody needs to answer
         if pairs:  # managed: the registry's sponsor is the accountable human
             for wf, _ in pairs:
                 person = inv.people.get(wf.sponsor.lower())

@@ -6,7 +6,7 @@ name: Lifecycle test (departing sponsor)
 business_owner: paul@{tenant_domain}
 sponsor: test-departing-sponsor@{tenant_domain}   # the user who "leaves"
 data_classification: restricted
-status: active
+status: retired                # test done (sponsor-departure verified); NHI goes through retirement
 expires: 2027-01-31
 review_by: 2026-12-31
 agents:

@@ -136,6 +136,25 @@ def _evaluate_present(
     def act(kind: ActionKind, reason: str, ref: str = "") -> None:
         plan.actions.append(Action(kind, key, nhi.name, reason, ref))
 
+    # --- retirement: disable, then soft-delete after grace -----------------------
+    # Retirement supersedes holds: the NHI stays off because the registry says so, so a
+    # hold is never released (that would suggest re-enabling) and no notices go out.
+    # The grace runs from when the NHI was disabled, whatever disabled it.
+    if wf.status is WorkflowStatus.RETIRED:
+        if enabled:
+            act("disable", "workflow retired")
+            plan.rows.append(Row(key, nhi.name, "active", "workflow retired", "disable now"))
+            return
+        disabled_on = rec.disabled_on or today
+        due = disabled_on + timedelta(days=policy.retirement_grace_days)
+        if today >= due:
+            act("delete", f"retired; disabled since {disabled_on}")
+            plan.rows.append(Row(key, nhi.name, "disabled", "workflow retired", "soft-delete now"))
+        else:
+            plan.rows.append(Row(key, nhi.name, "disabled", "workflow retired",
+                                 f"soft-delete on {due}"))  # fmt: skip
+        return
+
     # --- conditions that put a hold on the NHI ---------------------------------
     sponsor_issue = _sponsor_problem(inventory, wf)
     sponsor_since = _track(rec, "sponsor", sponsor_issue is not None, today)
@@ -156,22 +175,6 @@ def _evaluate_present(
             act("disable", hold)
     elif rec.hold:
         act("release", f"cause cleared ({rec.hold}); run `nhigov apply` to re-enable")
-
-    # --- retirement: disable, then soft-delete after grace -----------------------
-    if wf.status is WorkflowStatus.RETIRED:
-        if enabled:
-            act("disable", "workflow retired")
-            plan.rows.append(Row(key, nhi.name, "active", "workflow retired", "disable now"))
-            return
-        disabled_on = rec.disabled_on or today
-        due = disabled_on + timedelta(days=policy.retirement_grace_days)
-        if today >= due:
-            act("delete", f"retired; disabled since {disabled_on}")
-            plan.rows.append(Row(key, nhi.name, "disabled", "workflow retired", "soft-delete now"))
-        else:
-            plan.rows.append(Row(key, nhi.name, "disabled", "workflow retired",
-                                 f"soft-delete on {due}"))  # fmt: skip
-        return
 
     # --- notices: expiry and review dates approaching (not once it's held off) -----
     notice_window = timedelta(days=policy.expiry_notice_days)

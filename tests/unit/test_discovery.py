@@ -8,6 +8,7 @@ specific: the offline version of seed_mess's "every problem, and nothing else".
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,7 @@ from nhigov.graph.client import GraphClient
 from nhigov.reconcile.resources import role_id
 from nhigov.reconcile.state import BlueprintRecord, NhiRecord, ResourceRecord, TenantState
 from nhigov.registry.loader import load_registry
+from nhigov.registry.models import WorkflowStatus
 
 REGISTRY, _ = load_registry(Path(__file__).parents[2] / "registry")
 TENANT = "11111111-1111-1111-1111-111111111111"
@@ -218,6 +220,35 @@ def test_disabled_sponsor_is_nhi_002_for_managed_nhis() -> None:
     for user in raw.users.values():
         user["accountEnabled"] = False
     assert ("NHI-002", "nhi-wf-claims-triage-agent-summarizer") in scan(raw, state, clients)
+
+
+def test_a_retired_disabled_nhi_needs_no_sponsor() -> None:
+    # Retired and already off: the lifecycle is deleting it, so a departed sponsor isn't
+    # a finding (it would keep the nightly scan red until the soft-delete).
+    raw, state, clients = synthetic_tenant()
+    for user in raw.users.values():
+        user["accountEnabled"] = False
+    nhi = next(
+        s for s in raw.service_principals
+        if s["displayName"] == "nhi-wf-claims-triage-agent-summarizer"
+    )  # fmt: skip
+    nhi["accountEnabled"] = False
+    wf = REGISTRY.workflows["wf-claims-triage"]
+    retired = replace(
+        REGISTRY,
+        workflows={**REGISTRY.workflows,
+                   wf.id: wf.model_copy(update={"status": WorkflowStatus.RETIRED})},
+    )  # fmt: skip
+    ctx = ScanContext(retired, NOW, {"res": RES})
+
+    def found() -> set[tuple[str, str]]:
+        inv = build_inventory(raw, state, clients, NOW)
+        return {(f.rule, f.display_name) for f in run_rules(inv, ctx)}
+
+    assert ("NHI-002", "nhi-wf-claims-triage-agent-summarizer") not in found()
+    # Still enabled while retired: someone must answer for it, so it's still flagged.
+    nhi["accountEnabled"] = True
+    assert ("NHI-002", "nhi-wf-claims-triage-agent-summarizer") in found()
 
 
 def test_inventory_round_trips(tmp_path: Path) -> None:

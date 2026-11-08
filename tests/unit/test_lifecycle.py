@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import json
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -29,8 +30,18 @@ from nhigov.reconcile.state import BlueprintRecord, NhiRecord, TenantState
 from nhigov.registry.loader import Registry, load_registry
 from nhigov.registry.models import Backend, WorkflowStatus
 
-REGISTRY, _ = load_registry(Path(__file__).parents[2] / "registry")
+_REAL, _ = load_registry(Path(__file__).parents[2] / "registry")
 KEY = "wf-lifecycle-test/agent-router"
+# The fixture workflow is pinned active here, whatever its status in the real registry.
+REGISTRY = replace(
+    _REAL,
+    workflows={
+        **_REAL.workflows,
+        "wf-lifecycle-test": _REAL.workflows["wf-lifecycle-test"].model_copy(
+            update={"status": WorkflowStatus.ACTIVE}
+        ),
+    },
+)
 NAME = "nhi-wf-lifecycle-test-agent-router"
 DEPARTING = "test-departing-sponsor@tenant.example"
 DAY0 = date(2026, 11, 2)
@@ -123,6 +134,27 @@ def test_new_sponsor_releases_the_hold() -> None:
     assert "sponsor" not in plan.state.nhis[KEY].conditions
 
 
+def test_retirement_supersedes_a_hold() -> None:
+    # A held NHI whose workflow is then retired is never offered a release (which would
+    # suggest re-enabling it); it goes straight down the retirement path.
+    t = tenant()
+    lc = LifecycleState(
+        nhis={KEY: LifecycleRecord(hold="sponsor left", conditions={"sponsor": DAY0},
+                                   disabled_on=DAY0)}
+    )  # fmt: skip
+    wf = REGISTRY.workflows["wf-lifecycle-test"]
+    retired = replace(
+        REGISTRY,
+        workflows={**REGISTRY.workflows,
+                   wf.id: wf.model_copy(update={"status": WorkflowStatus.RETIRED})},
+    )  # fmt: skip
+    plan = run(t, lc, DAY0 + timedelta(days=3), retired, departing_enabled=True,
+               enabled={KEY: False})  # fmt: skip
+    assert kinds(plan) == []
+    assert row(plan) == "disabled"
+    assert kinds(run(t, lc, DAY0 + timedelta(days=14), retired, enabled={KEY: False})) == ["delete"]
+
+
 # ------------------------------------------------------------------ expiry, notices, retirement
 
 
@@ -153,8 +185,6 @@ def test_retired_workflow_is_soft_deleted_after_grace_then_purged(tmp_path: Path
     wfs["wf-lifecycle-test"] = wfs["wf-lifecycle-test"].model_copy(
         update={"status": WorkflowStatus.RETIRED}
     )
-    from dataclasses import replace
-
     retired = replace(REGISTRY, workflows=wfs)
     t = tenant()
     first = run(t, LifecycleState(), DAY0, retired, enabled={KEY: False})  # apply disabled it

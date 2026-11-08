@@ -131,9 +131,10 @@ def test_first_plan_creates_in_dependency_order(cert_dir: Path) -> None:
     assert order.index("blueprint.principal") < order.index("agent.create")
     assert order.index("agent.create") < order.index("grant.add")
     assert order.count("blueprint.credential") == 2
-    assert order.count("agent.create") == 4  # claims triage x2, lifecycle test, usage demo
+    # claims triage x2, usage demo; the retired lifecycle test is never created
+    assert order.count("agent.create") == 3
     assert order.count("spnhi.create") == 1
-    assert order.count("grant.add") == 6  # summarizer 1, router 2, demo 1, lifecycle 1, usage 1
+    assert order.count("grant.add") == 5  # summarizer 1, router 2, demo 1, usage 1
 
 
 @respx.mock
