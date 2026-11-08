@@ -9,7 +9,7 @@ P7 forbids client secrets. Secrets are the most common NHI compromise path: they
 | Where | Credential | How |
 |---|---|---|
 | Local runs | Self-signed **certificate** | `nhigov cert new <name>` writes `~/.nhigov/certs/<name>.pem` (key + cert, never committed) and `<name>.cer` (public, uploaded to the app) |
-| GitHub Actions | **Federated identity credential** (OIDC) | Subject bound to a GitHub environment per workflow: `repo:<owner>/<repo>:environment:wf-<id>` |
+| GitHub Actions | **Federated identity credential** (OIDC) | Subject bound to a GitHub environment per workflow: `repo:<owner>/<repo>:environment:wf-<id>`. Implemented in ADR-014 |
 | Control plane | Two separate apps, both certificate-based | `nhigov-provisioner` (write), `nhigov-scanner` (read-only) |
 
 Certificates default to **180 days**, matching the app management policy cap (ADR-012).

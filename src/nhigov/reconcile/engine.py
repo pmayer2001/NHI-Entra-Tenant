@@ -61,6 +61,7 @@ class PlanContext:
     state: TenantState
     today: date
     cert_dir: Path = DEFAULT_CERT_DIR
+    github_repository: str | None = None  # "owner/name" for federated credentials
     _user_ids: dict[str, str] = field(default_factory=dict)
     _graph_sp: tuple[str, dict[str, str]] | None = None
 
@@ -204,6 +205,22 @@ def _blueprint_credential(g: GraphClient, s: Step, st: TenantState, sl: Any) -> 
     return f"uploaded certificate (public key only) to bp-{s.key}"
 
 
+def _fic_path(kind: str, key: str, st: TenantState) -> str:
+    if kind.startswith("blueprint."):
+        return f"{_bp_path(_blueprint(st, key))}/federatedIdentityCredentials"
+    return f"applications/{_nhi(st, key).application_object_id}/federatedIdentityCredentials"
+
+
+def _fic_add(g: GraphClient, s: Step, st: TenantState, sl: Any) -> str:
+    send(g, "POST", _fic_path(s.kind, s.key, st), s.body, sl)
+    return f"added federated credential {s.body['name']} ({s.body['subject']})"
+
+
+def _fic_remove(g: GraphClient, s: Step, st: TenantState, sl: Any) -> str:
+    g.delete(f"{_fic_path(s.kind, s.key, st)}/{s.body['id']}")
+    return f"removed federated credential {s.body['name']}"
+
+
 def _agent_create(g: GraphClient, s: Step, st: TenantState, sl: Any) -> str:
     bp = _blueprint(st, _agent_of(s.key))
     body = {**s.body, "agentIdentityBlueprintId": bp.app_id}
@@ -292,6 +309,8 @@ HANDLERS: dict[str, Handler] = {
     "blueprint.principal": _blueprint_principal,
     "blueprint.credential": _blueprint_credential,
     "blueprint.adopt": _adopt,
+    "blueprint.fic-add": _fic_add,
+    "blueprint.fic-remove": _fic_remove,
     "blueprint.revoke": _blueprint_grant_revoke,
     "agent.create": _agent_create,
     "agent.enable": _agent_set_enabled,
@@ -304,6 +323,8 @@ HANDLERS: dict[str, Handler] = {
     "spnhi.enable": _spnhi_set_enabled,
     "spnhi.disable": _spnhi_set_enabled,
     "spnhi.adopt": _adopt,
+    "spnhi.fic-add": _fic_add,
+    "spnhi.fic-remove": _fic_remove,
     "grant.add": _grant,
     "grant.revoke": _revoke,
 }

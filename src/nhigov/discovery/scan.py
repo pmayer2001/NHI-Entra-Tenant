@@ -17,8 +17,8 @@ from nhigov.registry.loader import Registry
 
 def control_plane_clients(cfg: Config) -> dict[str, str]:
     return {
-        "nhigov-scanner": cfg.control_plane.scanner.client_id,
-        "nhigov-provisioner": cfg.control_plane.provisioner.client_id,
+        "nhigov-scanner": cfg.cp.scanner.client_id,
+        "nhigov-provisioner": cfg.cp.provisioner.client_id,
     }
 
 

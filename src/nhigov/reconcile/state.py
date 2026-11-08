@@ -8,6 +8,7 @@ at creation time is the authoritative link. No secrets are ever stored here.
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -51,8 +52,14 @@ class TenantState(BaseModel):
     nhis: dict[str, NhiRecord] = Field(default_factory=dict)
 
 
+# CI has no state file; the nightly scan gets it from a GitHub environment variable.
+STATE_ENV = "NHIGOV_STATE_JSON"
+
+
 def load_state(path: Path = STATE_PATH) -> TenantState:
     if not path.exists():
+        if os.environ.get(STATE_ENV):
+            return TenantState.model_validate_json(os.environ[STATE_ENV])
         return TenantState()
     return TenantState.model_validate_json(path.read_text(encoding="utf-8"))
 

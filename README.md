@@ -14,6 +14,7 @@
 | Lifecycle engine: expiry, sponsor departure, retirement, certificate rotation | `nhigov lifecycle status\|run\|rotate\|policy` | [ADR-012](docs/decisions/ADR-012-lifecycle.md) |
 | Unused-permission analytics from the API's usage log (NHI-012) | `nhigov usage analyze` | [ADR-007](docs/decisions/ADR-007-unused-permission-detection.md), [ADR-013](docs/decisions/ADR-013-usage-analytics.md) |
 | Capability probe: which Entra features this tenant allows | `nhigov probe` | [capability matrix](docs/capability-matrix.md) |
+| GitHub Actions runtime: agents and the nightly scan sign in with the job's OIDC token through federated credentials, no secrets | `nhigov ci vars` | [ADR-014](docs/decisions/ADR-014-github-actions-runtime.md) |
 
 The rules it enforces are in [docs/principles.md](docs/principles.md).
 
@@ -52,6 +53,8 @@ uv run nhigov lifecycle run --as-of DATE  # dry run; --execute disables/deletes
 uv run nhigov lifecycle rotate bp-agent-router   # dry run; --execute rotates the certificate
 uv run nhigov lifecycle policy            # dry run; --execute blocks secrets tenant-wide
 uv run nhigov usage analyze --window 30d  # offline: granted - used per NHI from the API log
+uv run nhigov ci vars                     # GitHub environment variables for the CI runtime
+uv run nhigov scan --summary-only         # counts only, for CI logs; exits 1 on critical/high
 ```
 
 Every command that writes to the tenant prints a plan first and asks before writing.

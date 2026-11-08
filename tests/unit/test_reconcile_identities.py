@@ -70,19 +70,24 @@ def _graph() -> GraphClient:
     return GraphClient(lambda: "t", sleep=lambda _: None)
 
 
-def plan(state: TenantState, cert_dir: Path, registry: Registry = REGISTRY) -> IdentityPlan:
+def plan(
+    state: TenantState, cert_dir: Path, registry: Registry = REGISTRY, repo: str | None = None
+) -> IdentityPlan:
     with _graph() as g:
-        ctx = PlanContext(graph=g, registry=registry, state=state, today=TODAY, cert_dir=cert_dir)
+        ctx = PlanContext(graph=g, registry=registry, state=state, today=TODAY, cert_dir=cert_dir,
+                          github_repository=repo)  # fmt: skip
         return plan_identities(ctx, Backend.AGENT_ID, CLIENTS)
 
 
-def apply(state: TenantState, cert_dir: Path, registry: Registry = REGISTRY) -> IdentityPlan:
+def apply(
+    state: TenantState, cert_dir: Path, registry: Registry = REGISTRY, repo: str | None = None
+) -> IdentityPlan:
     """What `nhigov apply` does: resources first, then identities."""
     with _graph() as g:
         resource_plan = plan_resource(g, RESOURCE, state)
         if not resource_plan.is_noop:
             apply_plan(g, resource_plan, state, save=lambda s: None, sleep=lambda _: None)
-    identity_plan = plan(state, cert_dir, registry)
+    identity_plan = plan(state, cert_dir, registry, repo)
     with _graph() as g:
         apply_steps(g, identity_plan.steps, state, save=lambda s: None, sleep=lambda _: None)
     return identity_plan
@@ -391,3 +396,74 @@ def test_without_policy_acceptance_the_system_grant_would_be_planned(cert_dir: P
     strict = replace(REGISTRY, policy=policy.model_copy(update={"blueprint_graph_grants": []}))
     revokes = [s for s in plan(state, cert_dir, strict).steps if s.kind == "blueprint.revoke"]
     assert {s.body["role"] for s in revokes} == {"AgentIdentity.CreateAsManager"}
+
+
+# ------------------------------------------------------------------ GitHub federated credentials
+
+REPO = "octo/nhigov"
+
+
+def _fics(t: FakeTenant, name: str) -> list[dict[str, object]]:
+    app = next(a for a in t.apps.values() if a["displayName"] == name)
+    return t.fics.get(app["id"], [])
+
+
+@respx.mock
+def test_github_runtime_gets_a_federated_credential_on_the_blueprint(cert_dir: Path) -> None:
+    # wf-claims-triage's summarizer lists github-actions; the credential goes on the
+    # shared blueprint (agent identities hold no credentials), bound to its environment.
+    t = tenant()
+    state = TenantState()
+    first = apply(state, cert_dir, repo=REPO)
+    adds = [s for s in first.steps if s.kind == "blueprint.fic-add"]
+    assert [(s.key, s.body["name"]) for s in adds] == [("agent-summarizer", "gh-wf-claims-triage")]
+    [fic] = _fics(t, "bp-agent-summarizer")
+    assert fic["subject"] == "repo:octo/nhigov:environment:wf-claims-triage"
+    assert fic["issuer"] == "https://token.actions.githubusercontent.com"
+    assert fic["audiences"] == ["api://AzureADTokenExchange"]
+    assert _fics(t, "bp-agent-router") == []  # no router runs in GitHub
+    assert plan(state, cert_dir, repo=REPO).steps == []  # second plan: no changes
+
+
+@respx.mock
+def test_a_suspended_workflow_loses_its_github_sign_in(cert_dir: Path) -> None:
+    t = tenant()
+    state = TenantState()
+    apply(state, cert_dir, repo=REPO)
+    suspended = with_workflow(REGISTRY, "wf-claims-triage", status=WorkflowStatus.SUSPENDED)
+    p = apply(state, cert_dir, suspended, repo=REPO)
+    assert ("blueprint.fic-remove", "agent-summarizer") in kinds(p)
+    assert _fics(t, "bp-agent-summarizer") == []
+
+
+@respx.mock
+def test_a_renamed_repo_replaces_the_credential(cert_dir: Path) -> None:
+    t = tenant()
+    state = TenantState()
+    apply(state, cert_dir, repo=REPO)
+    p = apply(state, cert_dir, repo="octo/renamed")
+    assert [k for k, _ in kinds(p) if "fic" in k] == ["blueprint.fic-remove", "blueprint.fic-add"]
+    [fic] = _fics(t, "bp-agent-summarizer")
+    assert fic["subject"] == "repo:octo/renamed:environment:wf-claims-triage"
+
+
+@respx.mock
+def test_unmanaged_credentials_are_reported_not_removed(cert_dir: Path) -> None:
+    t = tenant()
+    state = TenantState()
+    apply(state, cert_dir, repo=REPO)
+    app = next(a for a in t.apps.values() if a["displayName"] == "bp-agent-summarizer")
+    t.fics[app["id"]].append(
+        {"id": "x", "name": "someone-elses", "subject": "repo:evil/x:ref:main"}
+    )
+    p = plan(state, cert_dir, repo=REPO)
+    assert p.steps == []
+    assert any("'someone-elses'" in n and "isn't managed by nhigov" in n for n in p.notes)
+
+
+@respx.mock
+def test_without_a_repository_nothing_is_planned_but_it_says_why(cert_dir: Path) -> None:
+    tenant()
+    p = plan(TenantState(), cert_dir)
+    assert not any("fic" in k for k, _ in kinds(p))
+    assert any("no github.repository" in n for n in p.notes)

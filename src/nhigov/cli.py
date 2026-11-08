@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -16,14 +17,21 @@ import typer
 
 from nhigov import __version__
 from nhigov.agent_auth import TokenError, unverified_claims
-from nhigov.agents.identity import NotProvisioned, acquire_token, credentials_for
+from nhigov.agents.identity import (
+    NotProvisioned,
+    acquire_token,
+    credentials_for,
+    credentials_from_env,
+)
 from nhigov.agents.stubs import STUBS
 from nhigov.certs import DEFAULT_CERT_DIR, DEFAULT_LIFETIME_DAYS, generate_self_signed
+from nhigov.cli_ci import ci_app
 from nhigov.cli_lifecycle import lifecycle_app
 from nhigov.cli_usage import usage_app
 from nhigov.config import Config, load_config, load_tenant_domain
 from nhigov.discovery.inventory import Inventory
 from nhigov.discovery.report import write_reports
+from nhigov.discovery.rules.base import Finding
 from nhigov.discovery.scan import collect_inventory, evaluate
 from nhigov.graph.auth import TokenAcquisitionError, provisioner_token, scanner_token
 from nhigov.graph.client import GraphClient, GraphError
@@ -45,7 +53,7 @@ from nhigov.reconcile.resources import desired_application, desired_service_prin
 from nhigov.reconcile.state import STATE_PATH, TenantState, load_state, save_state
 from nhigov.registry.findings import Severity
 from nhigov.registry.loader import PLACEHOLDER_DOMAIN, load_registry
-from nhigov.registry.models import Backend
+from nhigov.registry.models import Backend, Runtime
 from nhigov.registry.online import validate_online
 from nhigov.registry.validate import validate_registry
 
@@ -56,6 +64,7 @@ agent_app = typer.Typer(no_args_is_help=True, help="Run agent stubs as their NHI
 app.add_typer(agent_app, name="agent")
 app.add_typer(lifecycle_app, name="lifecycle")
 app.add_typer(usage_app, name="usage")
+app.add_typer(ci_app, name="ci")
 api_app = typer.Typer(no_args_is_help=True, help="The mock Sensitive Records API.")
 app.add_typer(api_app, name="api")
 
@@ -217,9 +226,7 @@ def api_probe(
         raise typer.BadParameter(f"{resource_id} not loadable; run `nhigov validate` first")
 
     with GraphClient(scanner_token(cfg), base_url=cfg.graph.base_url) as scanner:
-        answers = run_resource_probe(
-            scanner, resource, cfg.tenant_id, cfg.control_plane.provisioner.client_id
-        )
+        answers = run_resource_probe(scanner, resource, cfg.tenant_id, cfg.cp.provisioner.client_id)
     app_body = desired_application(resource)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
@@ -250,8 +257,8 @@ def api_gate_check(
     registry, _ = load_registry(registry_dir, cfg.tenant_domain or PLACEHOLDER_DOMAIN)
     scope = f"{registry.resources['res-sensitive-records'].identifier_uri}/.default"
     clients = {
-        "nhigov-scanner": cfg.control_plane.scanner,
-        "nhigov-provisioner": cfg.control_plane.provisioner,
+        "nhigov-scanner": cfg.cp.scanner,
+        "nhigov-provisioner": cfg.cp.provisioner,
     }
     typer.echo(f"Requesting tokens for {scope} (neither identity holds a role on it)\n")
     with httpx.Client(timeout=30.0) as http:
@@ -325,13 +332,19 @@ def _build_plan(cfg: Config, registry_dir: Path, state: TenantState) -> FullPlan
         resources = [
             plan_resource(scanner, res, state) for res in registry.resources.values() if res.managed
         ]
-        ctx = PlanContext(graph=scanner, registry=registry, state=state, today=date.today())
+        ctx = PlanContext(
+            graph=scanner,
+            registry=registry,
+            state=state,
+            today=date.today(),
+            github_repository=cfg.github.repository,
+        )
         identities = plan_identities(
             ctx,
             Backend(cfg.identity_backend.value),
             {
-                "nhigov-scanner": cfg.control_plane.scanner.client_id,
-                "nhigov-provisioner": cfg.control_plane.provisioner.client_id,
+                "nhigov-scanner": cfg.cp.scanner.client_id,
+                "nhigov-provisioner": cfg.cp.provisioner.client_id,
             },
             load_lifecycle().holds(),
         )
@@ -477,6 +490,14 @@ def scan(
     from_inventory: Annotated[
         Path | None, typer.Option(help="Re-run the rules on a saved inventory (offline)")
     ] = None,
+    summary_only: Annotated[
+        bool,
+        typer.Option(
+            "--summary-only",
+            help="Counts only, no names or reports (for CI logs anyone may read); "
+            "exits 1 on a critical or high finding",
+        ),
+    ] = False,
 ) -> None:
     """Inventory every NHI in the tenant and flag problems (read-only, as the scanner)."""
     cfg = load_config(config_path)
@@ -491,6 +512,9 @@ def scan(
         else collect_inventory(cfg, registry, state, now)
     )
     findings = evaluate(inventory, registry, state, now)
+    if summary_only:
+        _scan_summary(inventory, findings)
+        return
     paths = write_reports(inventory, findings, out_dir, now)
 
     counts = Counter(n.classification for n in inventory.nhis)
@@ -503,6 +527,23 @@ def scan(
             fg=colors[f.severity.value],
         )
     typer.echo("\nWrote " + ", ".join(p.as_posix() for p in paths))
+
+
+def _scan_summary(inventory: Inventory, findings: list[Finding]) -> None:
+    """What a public CI log may show: how many, of what kind. Never which object."""
+    counts = Counter(n.classification for n in inventory.nhis)
+    typer.echo("Inventory: " + ", ".join(f"{counts[c]} {c}" for c in sorted(counts)))
+    by_rule = Counter((f.severity.value, f.rule) for f in findings)
+    typer.echo(f"{len(findings)} finding(s)")
+    for (severity, rule), n in sorted(by_rule.items()):
+        typer.echo(f"  {severity:<8} {rule}  x{n}")
+    serious = [f for f in findings if f.severity.value in ("critical", "high")]
+    if serious:
+        typer.secho(
+            f"{len(serious)} critical/high finding(s): run `nhigov scan` locally for details",
+            fg="red",
+        )
+        raise typer.Exit(1)
 
 
 @agent_app.command("run")
@@ -522,19 +563,26 @@ def agent_run(
     registry, _ = load_registry(Path("registry"), cfg.tenant_domain or PLACEHOLDER_DOMAIN)
     key = f"{workflow}/{agent}"
     wf = registry.workflows.get(workflow)
-    if wf is None or all(wa.ref != agent for wa in wf.agents):
+    entry = next((wa for wa in wf.agents if wa.ref == agent), None) if wf else None
+    if entry is None:
         raise typer.BadParameter(f"{key} isn't a (workflow, agent) pair in the registry (P1)")
     stub = STUBS.get(agent)
     if stub is None:
         raise typer.BadParameter(f"no stub for {agent}")
+    in_github = "ACTIONS_ID_TOKEN_REQUEST_URL" in os.environ
+    runtime = Runtime.GITHUB_ACTIONS if in_github else Runtime.LOCAL
+    if runtime not in entry.runtimes:  # where an agent may run is part of its registration
+        raise typer.BadParameter(f"the registry doesn't list {runtime} as a runtime for {key}")
     try:
-        creds = credentials_for(key, load_state(state_path))
+        creds = (
+            credentials_from_env(key) if in_github else credentials_for(key, load_state(state_path))
+        )
     except NotProvisioned as exc:
         raise typer.BadParameter(str(exc)) from None
 
     scope = f"{registry.resources['res-sensitive-records'].identifier_uri}/.default"
-    flow = "blueprint -> agent token exchange" if creds.blueprint_app_id else "own certificate"
-    typer.echo(f"{key}: getting a token as its NHI ({creds.backend}, {flow})")
+    flow = "blueprint -> agent token exchange" if creds.blueprint_app_id else "own app"
+    typer.echo(f"{key}: getting a token as its NHI ({creds.backend}, {flow}, {creds.method})")
     with httpx.Client(timeout=30.0) as http:
         try:
             token = acquire_token(http, cfg.tenant_id, creds, scope)

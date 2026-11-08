@@ -24,9 +24,12 @@ class ControlPlaneApp(BaseModel):
     """One of the two control-plane identities (ADR-005)."""
 
     client_id: str
-    cert_path: Path
+    # None in CI: the app signs in with a GitHub OIDC token instead (federated credential).
+    cert_path: Path | None = None
 
     def resolved_cert_path(self) -> Path:
+        if self.cert_path is None:
+            raise ValueError(f"no cert_path configured for {self.client_id}")
         return self.cert_path.expanduser()
 
 
@@ -37,6 +40,13 @@ class ControlPlane(BaseModel):
 
 class GraphSettings(BaseModel):
     base_url: str = "https://graph.microsoft.com"
+
+
+class GitHubSettings(BaseModel):
+    """Where the GitHub Actions runtime lives. Federated credentials trust exactly
+    `repo:<repository>:environment:<workflow id>`, so this must match the real repo."""
+
+    repository: str | None = None  # "owner/name"
 
 
 class SensitiveApiConfig(BaseModel):
@@ -53,9 +63,18 @@ class Config(BaseModel):
     # so the domain (which reveals the tenant) is never committed.
     tenant_domain: str | None = None
     identity_backend: IdentityBackendKind = IdentityBackendKind.SERVICE_PRINCIPAL
-    control_plane: ControlPlane
+    # Optional so an agent job in CI (which needs neither app) can load config.
+    control_plane: ControlPlane | None = None
     graph: GraphSettings = Field(default_factory=GraphSettings)
     sensitive_api: SensitiveApiConfig | None = None
+    github: GitHubSettings = Field(default_factory=GitHubSettings)
+
+    @property
+    def cp(self) -> ControlPlane:
+        """The control-plane apps, for commands that need them."""
+        if self.control_plane is None:
+            raise ValueError("config has no control_plane section (see config.example.yaml)")
+        return self.control_plane
 
 
 # env var -> path into the config dict
@@ -69,6 +88,7 @@ _ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "NHIGOV_SCANNER_CERT_PATH": ("control_plane", "scanner", "cert_path"),
     "NHIGOV_API_AUDIENCE": ("sensitive_api", "audience"),
     "NHIGOV_API_TOKEN_VERSION": ("sensitive_api", "token_version"),
+    "NHIGOV_GITHUB_REPOSITORY": ("github", "repository"),
 }
 
 

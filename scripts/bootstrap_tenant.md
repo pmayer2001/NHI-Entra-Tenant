@@ -44,7 +44,7 @@ Each command prints the `.cer` path to upload and the thumbprint. Private keys s
 cp config.example.yaml config.yaml      # then fill in the three IDs
 uv run nhigov -v probe                  # read checks only; write checks shown as "planned"
 ```
-Then, **after confirming in the Claude Code session**:
+Then, once you've read what the write checks will create:
 ```bash
 uv run nhigov probe --sponsor paul@YOURTENANT.onmicrosoft.com --execute
 ```
@@ -56,3 +56,10 @@ Follow `docs/spikes/agent-id-token-spike.md` if probe W01–W03 are OK.
 ## 8. Record the outcome
 - [X] Set `identity_backend` in `config.yaml` to the probe's recommendation (`agent_id`).
 - [X] Update ADR-003's status to *Accepted* with the chosen backend.
+
+## 9. GitHub Actions (optional: agents and the nightly scan in CI, no secrets)
+- [ ] Create the GitHub repository and set `github.repository: owner/name` in `config.yaml`.
+- [ ] `uv run nhigov plan`, then `uv run nhigov apply`: adds a federated credential `gh-<workflow>` to the blueprint (or app) of every agent whose `runtimes` include `github-actions` (ADR-014).
+- [ ] `uv run nhigov ci vars`: lists the GitHub environments to create (Settings > Environments, one per workflow, e.g. `wf-claims-triage`) and the **variables** (not secrets) each needs.
+- [ ] Scanner (nightly scan): the control plane isn't managed by `apply`, so add its federated credential by hand: Entra admin center > App registrations > `nhigov-scanner` > Certificates & secrets > Federated credentials > Add > *Other issuer*, with the issuer, subject and name `nhigov ci vars` prints.
+- [ ] Actions > run `agent: wf-claims-triage / agent-summarizer`. The log should show `GitHub OIDC (federated credential)` and the agent's token roles.

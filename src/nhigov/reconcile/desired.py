@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from nhigov.registry.loader import Registry
-from nhigov.registry.models import Backend, IdentityType, WorkflowStatus
+from nhigov.registry.models import Backend, IdentityType, Runtime, WorkflowStatus
 
 
 @dataclass(frozen=True, order=True)
@@ -43,6 +43,7 @@ class DesiredNhi:
     grants: tuple[Grant, ...]
     # A lifecycle hold (sponsor left, expired): keep it disabled even if `active`.
     hold: str | None = None
+    runtimes: tuple[Runtime, ...] = (Runtime.LOCAL,)
 
     @property
     def key(self) -> str:
@@ -60,6 +61,12 @@ class DesiredNhi:
     @property
     def should_be_enabled(self) -> bool:
         return self.status is WorkflowStatus.ACTIVE and self.hold is None
+
+    @property
+    def runs_in_github(self) -> bool:
+        """Needs a federated credential for the workflow's GitHub environment. Only while
+        enabled: a suspended or held NHI loses the CI sign-in path too."""
+        return Runtime.GITHUB_ACTIONS in self.runtimes and self.should_be_enabled
 
 
 @dataclass(frozen=True)
@@ -98,6 +105,7 @@ def build_desired(
                     sorted(Grant(p.resource, r) for p in wa.permissions for r in p.app_roles)
                 ),
                 hold=(holds or {}).get(f"{wf.id}/{agent.id}"),
+                runtimes=tuple(wa.runtimes),
             )
             desired.nhis[nhi.key] = nhi
             if backend is Backend.AGENT_ID and nhi.should_exist:

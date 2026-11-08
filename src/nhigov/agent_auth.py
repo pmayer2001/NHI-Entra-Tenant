@@ -3,7 +3,8 @@
 An agent identity has no credential of its own. To act as one:
 
   T1  the *blueprint* authenticates with its certificate (a signed client
-      assertion) and asks for `api://AzureADTokenExchange/.default`, naming the
+      assertion) or, in GitHub Actions, with the job's OIDC token (a federated
+      credential: no secret, no key), and asks for `api://AzureADTokenExchange/.default`, naming the
       agent identity in `fmi_path`.
   T2  the agent identity then authenticates with T1 *as its client assertion*
       and asks for the real resource (e.g. Graph, or our Sensitive API).
@@ -17,8 +18,10 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import time
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +33,11 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 TOKEN_URL = "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"  # noqa: S105 (public endpoint)
 TOKEN_EXCHANGE_SCOPE = "api://AzureADTokenExchange/.default"  # noqa: S105 (scope name)
 JWT_BEARER = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+# The audience Entra expects on an external token used as a federated credential.
+EXCHANGE_AUDIENCE = "api://AzureADTokenExchange"
+
+# A certificate (we sign the assertion) or something that hands us a ready-made one.
+AssertionSource = Path | Callable[[], str]
 
 
 class TokenError(Exception):
@@ -111,6 +119,33 @@ def proof_of_possession(pem_path: Path, application_object_id: str) -> str:
                                "iat": now, "nbf": now, "exp": now + 600})  # fmt: skip
 
 
+def _assertion(source: AssertionSource, client_id: str, tenant_id: str) -> str:
+    if isinstance(source, Path):
+        return client_assertion(source, client_id, tenant_id)
+    return source()
+
+
+class GitHubOidcUnavailable(Exception):
+    """Not in a GitHub Actions job with `permissions: id-token: write`."""
+
+
+def github_oidc_token(http: httpx.Client, env: dict[str, str] | None = None) -> str:
+    """The job's OIDC token from GitHub, with the audience Entra's federated credentials
+    expect. Its `sub` names the repo and environment, which is what the credential's
+    subject must match. GitHub only offers it to jobs granted `id-token: write`."""
+    env = dict(os.environ) if env is None else env
+    url, bearer = env.get("ACTIONS_ID_TOKEN_REQUEST_URL"), env.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+    if not url or not bearer:
+        raise GitHubOidcUnavailable(
+            "no GitHub OIDC token: run inside GitHub Actions with `permissions: id-token: write`"
+        )
+    response = http.get(
+        url, params={"audience": EXCHANGE_AUDIENCE}, headers={"Authorization": f"Bearer {bearer}"}
+    )
+    response.raise_for_status()
+    return str(response.json()["value"])
+
+
 def request_token(http: httpx.Client, tenant_id: str, form: dict[str, str]) -> str:
     response = http.post(TOKEN_URL.format(tenant=tenant_id), data=form)
     body: dict[str, Any] = response.json()
@@ -123,9 +158,11 @@ def request_token(http: httpx.Client, tenant_id: str, form: dict[str, str]) -> s
     )
 
 
-def app_token(http: httpx.Client, tenant_id: str, client_id: str, pem: Path, scope: str) -> str:
-    """A classic app-only token: the app proves possession of its own certificate.
-    Used by service-principal-backend NHIs, which have their own credential."""
+def app_token(
+    http: httpx.Client, tenant_id: str, client_id: str, pem: AssertionSource, scope: str
+) -> str:
+    """A classic app-only token: the app proves who it is with its own certificate or a
+    federated token. Used by service-principal-backend NHIs, which have their own credential."""
     return request_token(
         http,
         tenant_id,
@@ -134,7 +171,7 @@ def app_token(http: httpx.Client, tenant_id: str, client_id: str, pem: Path, sco
             "scope": scope,
             "grant_type": "client_credentials",
             "client_assertion_type": JWT_BEARER,
-            "client_assertion": client_assertion(pem, client_id, tenant_id),
+            "client_assertion": _assertion(pem, client_id, tenant_id),
         },
     )
 
@@ -143,7 +180,7 @@ def blueprint_exchange_token(
     http: httpx.Client,
     tenant_id: str,
     blueprint_app_id: str,
-    blueprint_pem: Path,
+    blueprint_pem: AssertionSource,
     agent_client_id: str,
 ) -> str:
     """T1: the blueprint's token, scoped by fmi_path to one agent identity."""
@@ -155,7 +192,7 @@ def blueprint_exchange_token(
             "scope": TOKEN_EXCHANGE_SCOPE,
             "grant_type": "client_credentials",
             "client_assertion_type": JWT_BEARER,
-            "client_assertion": client_assertion(blueprint_pem, blueprint_app_id, tenant_id),
+            "client_assertion": _assertion(blueprint_pem, blueprint_app_id, tenant_id),
             "fmi_path": agent_client_id,
         },
     )

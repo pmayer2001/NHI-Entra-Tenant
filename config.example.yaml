@@ -23,3 +23,9 @@ graph:
 sensitive_api:
   audience: "00000000-0000-0000-0000-000000000000"        # NHIGOV_API_AUDIENCE (v2: the API's appId)
   token_version: 2                                         # NHIGOV_API_TOKEN_VERSION
+
+# The GitHub repo whose Actions environments may sign in as NHIs (federated credentials).
+# Each workflow that lists `github-actions` in an agent's runtimes is trusted from the
+# environment named after the workflow: repo:<repository>:environment:<workflow id>.
+github:
+  repository: "your-github-user/your-repo"                  # NHIGOV_GITHUB_REPOSITORY

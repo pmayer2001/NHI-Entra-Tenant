@@ -8,15 +8,19 @@ No shared secret ever crosses the wire, so there is nothing to leak from logs.
 
 from __future__ import annotations
 
+import os
 import re
+import time
 from pathlib import Path
 from typing import Protocol
 
+import httpx
 from azure.core.exceptions import ClientAuthenticationError
 from azure.identity import CertificateCredential
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 
+from nhigov.agent_auth import TokenError, app_token, github_oidc_token, unverified_claims
 from nhigov.config import Config, ControlPlaneApp
 
 GRAPH_DEFAULT_SCOPE = "https://graph.microsoft.com/.default"
@@ -89,13 +93,43 @@ class CertificateTokenProvider:
             ) from exc
 
 
-def provisioner_token(config: Config) -> CertificateTokenProvider:
-    return CertificateTokenProvider(
-        config.tenant_id, config.control_plane.provisioner, "nhigov-provisioner"
-    )
+class FederatedTokenProvider:
+    """App-only Graph token in GitHub Actions: the job's OIDC token is the client
+    assertion, accepted through a federated credential on the app (ADR-014). Nothing
+    to store or leak: the GitHub token lives minutes and only that job can get one."""
+
+    def __init__(self, tenant_id: str, client_id: str, name: str, scope: str = GRAPH_DEFAULT_SCOPE):
+        self._tenant_id, self._client_id, self._name, self._scope = (
+            tenant_id,
+            client_id,
+            name,
+            scope,
+        )
+        self._token: tuple[str, float] | None = None
+
+    def __call__(self) -> str:
+        if self._token and self._token[1] - time.time() > 300:
+            return self._token[0]
+        with httpx.Client(timeout=30.0) as http:
+            try:
+                token = app_token(http, self._tenant_id, self._client_id,
+                                  lambda: github_oidc_token(http), self._scope)  # fmt: skip
+            except TokenError as exc:
+                raise TokenAcquisitionError(f"{self._name} (GitHub OIDC): {exc}") from exc
+        self._token = (token, float(unverified_claims(token).get("exp", 0)))
+        return token
 
 
-def scanner_token(config: Config) -> CertificateTokenProvider:
-    return CertificateTokenProvider(
-        config.tenant_id, config.control_plane.scanner, "nhigov-scanner"
-    )
+def _provider(config: Config, app: ControlPlaneApp, name: str) -> TokenProvider:
+    """Certificate locally; GitHub OIDC in Actions when no certificate is configured."""
+    if app.cert_path is None and os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL"):
+        return FederatedTokenProvider(config.tenant_id, app.client_id, name)
+    return CertificateTokenProvider(config.tenant_id, app, name)
+
+
+def provisioner_token(config: Config) -> TokenProvider:
+    return _provider(config, config.cp.provisioner, "nhigov-provisioner")
+
+
+def scanner_token(config: Config) -> TokenProvider:
+    return _provider(config, config.cp.scanner, "nhigov-scanner")

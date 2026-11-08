@@ -1,0 +1,48 @@
+# Runs agent-summarizer for wf-claims-triage as its own NHI, with no secrets anywhere.
+#
+# How it signs in: the job asks GitHub for an OIDC token (`id-token: write`). Because the
+# job is bound to the `wf-claims-triage` environment, the token's subject is
+# `repo:<owner>/<repo>:environment:wf-claims-triage`. The agent's blueprint has a
+# federated credential trusting exactly that subject (created by `nhigov apply`), so
+# Entra accepts the GitHub token in place of a certificate, then exchanges it for a
+# token as the agent identity. The Sensitive Records API runs inside the same job.
+#
+# Setup: `nhigov ci vars` prints the variables for the environment.
+name: "agent: wf-claims-triage / agent-summarizer"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    environment: wf-claims-triage
+    permissions:
+      contents: read
+      id-token: write   # lets this job request a GitHub OIDC token; nothing else can sign in
+    env:
+      NHIGOV_TENANT_ID: ${{ vars.NHIGOV_TENANT_ID }}
+      NHIGOV_API_AUDIENCE: ${{ vars.NHIGOV_API_AUDIENCE }}
+      NHIGOV_AGENT_BACKEND: ${{ vars.AGENT_SUMMARIZER_BACKEND }}
+      NHIGOV_AGENT_CLIENT_ID: ${{ vars.AGENT_SUMMARIZER_CLIENT_ID }}
+      NHIGOV_BLUEPRINT_APP_ID: ${{ vars.AGENT_SUMMARIZER_BLUEPRINT_APP_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --locked --python 3.12
+
+      - name: Start the Sensitive Records API on localhost
+        run: |
+          uv run nhigov api serve > api.log 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -sf -o /dev/null http://127.0.0.1:8000/docs && exit 0
+            sleep 1
+          done
+          cat api.log
+          exit 1
+
+      - name: Run the agent as its NHI (GitHub OIDC -> federated credential)
+        run: uv run nhigov agent run wf-claims-triage agent-summarizer

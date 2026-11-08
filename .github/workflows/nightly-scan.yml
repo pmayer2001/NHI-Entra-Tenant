@@ -1,0 +1,39 @@
+# Nightly discovery scan as nhigov-scanner (read-only), signed in with the job's GitHub
+# OIDC token through a federated credential on the scanner app: no certificate in CI.
+#
+# The log shows counts only (--summary-only): workflow logs may be readable by anyone,
+# and object names and findings describe the tenant's security posture. The job fails
+# on any critical or high finding; run `nhigov scan` locally for details.
+#
+# Setup: `nhigov ci vars` prints the variables for the wf-control-plane environment and
+# the federated credential to add to the scanner app by hand.
+name: "nightly discovery scan"
+
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    environment: wf-control-plane
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      NHIGOV_TENANT_ID: ${{ vars.NHIGOV_TENANT_ID }}
+      NHIGOV_TENANT_DOMAIN: ${{ vars.NHIGOV_TENANT_DOMAIN }}
+      NHIGOV_IDENTITY_BACKEND: ${{ vars.NHIGOV_IDENTITY_BACKEND }}
+      NHIGOV_SCANNER_CLIENT_ID: ${{ vars.NHIGOV_SCANNER_CLIENT_ID }}
+      NHIGOV_PROVISIONER_CLIENT_ID: ${{ vars.NHIGOV_PROVISIONER_CLIENT_ID }}
+      NHIGOV_STATE_JSON: ${{ vars.NHIGOV_STATE_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --locked --python 3.12
+      - name: Scan (read-only; counts only)
+        run: uv run nhigov scan --summary-only

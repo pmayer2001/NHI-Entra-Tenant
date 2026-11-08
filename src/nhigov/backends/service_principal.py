@@ -12,6 +12,7 @@ from nhigov.backends.base import Principals
 from nhigov.certs import key_credential, load_local_cert
 from nhigov.reconcile.desired import Desired, DesiredNhi
 from nhigov.reconcile.engine import IdentityPlan, JsonDict, PlanContext, PlanError, Step
+from nhigov.reconcile.federated import plan_fics
 from nhigov.registry.models import Backend
 
 APP_SELECT = "id,appId,displayName,tags,signInAudience,keyCredentials"
@@ -34,6 +35,12 @@ class ServicePrincipalBackend:
             if exists:
                 principals[nhi.key] = found
         return principals
+
+    @staticmethod
+    def _plan_fics(ctx: PlanContext, nhi: DesiredNhi, path: str | None, plan: IdentityPlan) -> None:
+        workflows = [nhi.workflow_id] if nhi.runs_in_github else []
+        plan_fics(ctx, plan, kind="spnhi", key=nhi.key, label=nhi.name, path=path,
+                  workflows=workflows)  # fmt: skip
 
     def _find_app(self, ctx: PlanContext, nhi: DesiredNhi) -> JsonDict | None:
         rec = ctx.state.nhis.get(nhi.key)
@@ -93,6 +100,7 @@ class ServicePrincipalBackend:
                     {"tags": tags},
                 ),
             ]
+            self._plan_fics(ctx, nhi, None, plan)
             return None, True
 
         sp_list = ctx.graph.get(
@@ -143,6 +151,7 @@ class ServicePrincipalBackend:
                     ("keyCredentials",),
                 )
             )
+        self._plan_fics(ctx, nhi, f"applications/{app['id']}/federatedIdentityCredentials", plan)
 
         if sp is None:
             if nhi.should_be_enabled:

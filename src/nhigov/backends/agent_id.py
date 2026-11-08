@@ -14,6 +14,7 @@ from nhigov.backends.base import Principals
 from nhigov.certs import key_credential, load_local_cert
 from nhigov.reconcile.desired import Desired, DesiredBlueprint, DesiredNhi
 from nhigov.reconcile.engine import IdentityPlan, JsonDict, PlanContext, PlanError, Step
+from nhigov.reconcile.federated import plan_fics
 from nhigov.registry.models import Backend
 
 BP_COLLECTION = "applications/microsoft.graph.agentIdentityBlueprint"
@@ -62,7 +63,7 @@ class AgentIdBackend:
 
     def plan(self, ctx: PlanContext, desired: Desired, plan: IdentityPlan) -> Principals:
         bp_app_ids: dict[str, str | None] = {
-            agent_id: self._plan_blueprint(ctx, bp, plan)
+            agent_id: self._plan_blueprint(ctx, bp, plan, self._github_workflows(desired, agent_id))
             for agent_id, bp in desired.blueprints.items()
         }
         principals: Principals = {}
@@ -76,8 +77,19 @@ class AgentIdBackend:
 
     # ------------------------------------------------------------------ blueprints
 
+    @staticmethod
+    def _github_workflows(desired: Desired, agent_id: str) -> list[str]:
+        """Workflows whose NHI of this agent runs in GitHub Actions. Each one's
+        environment gets a federated credential on the *shared* blueprint, so a job
+        in any of them can reach every agent of this blueprint (ADR-003, ADR-014)."""
+        return sorted(
+            n.workflow_id
+            for n in desired.nhis.values()
+            if n.agent_id == agent_id and n.backend is Backend.AGENT_ID and n.runs_in_github
+        )
+
     def _plan_blueprint(
-        self, ctx: PlanContext, bp: DesiredBlueprint, plan: IdentityPlan
+        self, ctx: PlanContext, bp: DesiredBlueprint, plan: IdentityPlan, workflows: list[str]
     ) -> str | None:
         """Returns the blueprint's appId if it exists now, else None (created by this plan)."""
         rec = ctx.state.blueprints.get(bp.agent_id)
@@ -117,6 +129,8 @@ class AgentIdBackend:
             plan.notes += notes
             if body:
                 plan.steps.append(self._credential_step(bp, body))
+            plan_fics(ctx, plan, kind="blueprint", key=bp.agent_id, label=bp.name, path=None,
+                      workflows=workflows)  # fmt: skip
             return None
 
         principal = ctx.graph.get(
@@ -139,6 +153,10 @@ class AgentIdBackend:
         plan.notes += notes
         if body:
             plan.steps.append(self._credential_step(bp, body))
+        fics = f"applications/{app['id']}/microsoft.graph.agentIdentityBlueprint"
+        fics += "/federatedIdentityCredentials"
+        plan_fics(ctx, plan, kind="blueprint", key=bp.agent_id, label=bp.name, path=fics,
+                  workflows=workflows)  # fmt: skip
         if note := ctx.sponsors_note(
             f"applications/{app['id']}/microsoft.graph.agentIdentityBlueprint/sponsors",
             bp.sponsor_upns,

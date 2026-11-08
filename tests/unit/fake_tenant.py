@@ -48,6 +48,7 @@ class FakeTenant:
         self.apps: dict[str, dict[str, Any]] = {}
         self.sps: dict[str, dict[str, Any]] = {}
         self.assignments: dict[str, list[dict[str, Any]]] = {}
+        self.fics: dict[str, list[dict[str, Any]]] = {}  # application object ID -> FICs
         self.users: dict[str, str] = {}
         self.sp_lag_failures = sp_lag_failures
         self.agent_lag_failures = agent_lag_failures
@@ -244,6 +245,28 @@ class FakeTenant:
             self.writes.append("PATCH agentIdentity")
             return httpx.Response(204)
 
+        # federated identity credentials ------------------------------
+        def list_fics(request: httpx.Request, oid: str) -> httpx.Response:
+            if oid not in self.apps:
+                return _error(404, "Request_ResourceNotFound")
+            return _json({"value": self.fics.get(oid, [])})
+
+        def add_fic(request: httpx.Request, oid: str) -> httpx.Response:
+            if oid not in self.apps:
+                return _error(404, "Request_ResourceNotFound")
+            body = json.loads(request.content)
+            if any(f["name"] == body["name"] for f in self.fics.get(oid, [])):
+                return _error(409, "Request_MultipleObjectsWithSameKeyValue")
+            fic = {"id": str(uuid.uuid4()), **body}
+            self.fics.setdefault(oid, []).append(fic)
+            self.writes.append("POST federatedIdentityCredential")
+            return _json(fic, 201)
+
+        def delete_fic(request: httpx.Request, oid: str, fid: str) -> httpx.Response:
+            self.fics[oid] = [f for f in self.fics.get(oid, []) if f["id"] != fid]
+            self.writes.append("DELETE federatedIdentityCredential")
+            return httpx.Response(204)
+
         # role assignments --------------------------------------------
         def list_assignments(request: httpx.Request, oid: str) -> httpx.Response:
             return _json({"value": self.assignments.get(oid, [])})
@@ -271,6 +294,10 @@ class FakeTenant:
             ("GET", r"users/(?P<upn>[^/]+)", user),
             ("GET", r"applications/microsoft\.graph\.agentIdentityBlueprint", list_blueprints),
             ("GET", rf"applications/{R}/{BP}/sponsors", forbidden),
+            ("GET", rf"applications/{R}/(?:{BP}/)?federatedIdentityCredentials", list_fics),
+            ("POST", rf"applications/{R}/(?:{BP}/)?federatedIdentityCredentials", add_fic),
+            ("DELETE", rf"applications/{R}/(?:{BP}/)?federatedIdentityCredentials/(?P<fid>[^/]+)",
+             delete_fic),
             ("GET", rf"applications/{R}/microsoft\.graph\.agentIdentityBlueprint", get_app),
             ("PATCH", rf"applications/{R}/microsoft\.graph\.agentIdentityBlueprint", patch_app),
             ("GET", r"applications", list_apps),
