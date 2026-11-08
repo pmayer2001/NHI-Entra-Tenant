@@ -3,15 +3,15 @@
 These are the only portal steps in the project. After this, everything goes through code. Tick each box as you go. Never paste tenant IDs, client IDs or object IDs into this file, because the repo may be public.
 
 ## 1. Tenant and cost guardrail
-- [X] Create an Azure free account with a **personal** email (never an employer account, CLAUDE.md §14.6). This creates a free Entra ID tenant (`<something>.onmicrosoft.com`).
+- [X] Create an Azure free account with a **personal** email (never an employer account). This creates a free Entra ID tenant (`<something>.onmicrosoft.com`).
 - [X] **Budget alert at $1:** Azure portal → *Cost Management + Billing* → *Budgets* → *Add*. Scope: the free subscription, amount `1`, alert at 100% actual to your email.
-- [X] Confirm the tenant is **Microsoft Entra ID Free**: Entra admin center → *Overview* → *License*. Do **not** start the P2 trial yet (Phase 9).
+- [X] Confirm the tenant is **Microsoft Entra ID Free**: Entra admin center → *Overview* → *License*. Don't start the P2 trial: everything here runs on Free (a trial is only for comparing paid features, `docs/free-vs-paid.md`).
 
 ## 2. A cloud-only admin and sponsor user
 Your sign-up account is usually a *guest* (`#EXT#`) from your personal Microsoft account. Sponsors must be real member users, so:
 - [X] Entra admin center → *Users* → *New user* → `paul@<tenant>.onmicrosoft.com`. Assign **Global Administrator** (needed once, to grant admin consent below).
 - [X] Sign in as that user and register MFA (security defaults enforce it on Free).
-- [X] Also create `test-departing-sponsor@<tenant>.onmicrosoft.com` (no roles). Phase 6 disables it on purpose.
+- [X] Also create `test-departing-sponsor@<tenant>.onmicrosoft.com` (no roles). The lifecycle test disables it on purpose.
 
 ## 3. Certificates for the control plane (local, no portal)
 ```bash
@@ -33,7 +33,7 @@ Each command prints the `.cer` path to upload and the thumbprint. Private keys s
 
 ## 5. Register `nhigov-provisioner` (write)
 - [X] New registration `nhigov-provisioner`, single tenant, upload `nhigov-provisioner.cer`, no secret.
-- [X] **Application permissions** (ceiling set by CLAUDE.md §14.3; rationale in ADR-005):
+- [X] **Application permissions** (kept to a fixed ceiling; rationale in ADR-005):
   `Application.ReadWrite.OwnedBy`, `AppRoleAssignment.ReadWrite.All`, `Policy.ReadWrite.ApplicationConfiguration`, `AgentIdentityBlueprint.Create`, `AgentIdentityBlueprint.AddRemoveCreds.All`, `AgentIdentityBlueprint.UpdateAuthProperties.All`, `AgentIdentityBlueprintPrincipal.Create`, `AgentIdentity.Create.All`,
   plus for lifecycle (ADR-005 amendment): `AgentIdentity.EnableDisable.All`, `AgentIdentity.DeleteRestore.All`, `AgentIdentityBlueprint.DeleteRestore.All`
 - [X] Remove delegated `User.Read`. Grant admin consent.
@@ -56,4 +56,3 @@ Follow `docs/spikes/agent-id-token-spike.md` if probe W01–W03 are OK.
 ## 8. Record the outcome
 - [X] Set `identity_backend` in `config.yaml` to the probe's recommendation (`agent_id`).
 - [X] Update ADR-003's status to *Accepted* with the chosen backend.
-- [ ] Note anything that surprised you in `docs/learning-notes.md`.

@@ -1,4 +1,4 @@
-"""Registry schema (CLAUDE.md §6, ADR-008).
+"""Registry schema (ADR-008).
 
 Every model forbids unknown fields: a typo like `sponsr:` must fail validation,
 not be silently ignored, because an ignored governance field is a missing control.
@@ -57,7 +57,7 @@ class Runtime(StrEnum):
 
 
 class Cadence(StrEnum):
-    """How often the agent is expected to run; dormancy rules use it (§9)."""
+    """How often the agent is expected to run; usage analytics uses it (ADR-013)."""
 
     HOURLY = "hourly"
     DAILY = "daily"
@@ -134,7 +134,7 @@ class WorkflowAgent(_Strict):
 
 
 class RiskException(_Strict):
-    """Written justification for high-risk permissions (CLAUDE.md §6)."""
+    """Written justification for high-risk permissions (ADR-008)."""
 
     reason: str = Field(min_length=20)
     approved_by: Upn
@@ -181,7 +181,7 @@ class Policy(_Strict):
     # of places a blueprint key could leak from, and every agent of it with it (ADR-003).
     max_blueprint_credentials: int = Field(default=2, ge=1)
     # Microsoft Graph app roles a blueprint principal may keep. Entra grants each new
-    # blueprint principal AgentIdentity.CreateAsManager on its own (observed in Phase 5);
+    # blueprint principal AgentIdentity.CreateAsManager on its own (observed by discovery);
     # anything not listed here is revoked by `apply` and reported by NHI-007.
     blueprint_graph_grants: list[RoleValue] = Field(default_factory=list)
     # P9: these identities must be registered like any other NHI.

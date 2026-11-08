@@ -1,4 +1,4 @@
-"""Cross-file registry rules (CLAUDE.md §6, ADR-008).
+"""Cross-file registry rules (ADR-008).
 
 Each rule is a pure function `(registry, context) -> findings`, so it can be
 tested in isolation and run offline in CI. REG-000/001 come from the loader.

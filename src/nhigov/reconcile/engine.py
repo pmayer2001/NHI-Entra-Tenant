@@ -24,7 +24,7 @@ from nhigov.registry.loader import Registry
 JsonDict = dict[str, Any]
 GRAPH_USERS = "https://graph.microsoft.com/v1.0/users/"
 GRAPH_APP_ID = "00000003-0000-0000-c000-000000000000"
-# Just-created objects (and their owner links) replicate for a few seconds (Phase 0).
+# Just-created objects (and their owner links) replicate for a few seconds (ADR-002).
 LAG_BACKOFF = (2.0, 4.0, 8.0, 16.0)
 _LAG_MESSAGES = ("does not exist", "not found", "resourcenotfound")
 

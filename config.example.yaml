@@ -5,7 +5,7 @@
 tenant_id: "00000000-0000-0000-0000-000000000000"          # NHIGOV_TENANT_ID
 tenant_domain: "yourtenant.onmicrosoft.com"           # NHIGOV_TENANT_DOMAIN
 
-# Chosen from the Phase 0 probe results (ADR-003): agent_id | service_principal
+# Chosen from the capability probe results (ADR-003): agent_id | service_principal
 identity_backend: service_principal                         # NHIGOV_IDENTITY_BACKEND
 
 control_plane:
@@ -19,7 +19,7 @@ control_plane:
 graph:
   base_url: "https://graph.microsoft.com"
 
-# Mock Sensitive Records API (Phase 2). Fill in after the resource app is registered.
+# Mock Sensitive Records API. Fill in after the resource app is registered.
 sensitive_api:
   audience: "00000000-0000-0000-0000-000000000000"        # NHIGOV_API_AUDIENCE (v2: the API's appId)
   token_version: 2                                         # NHIGOV_API_TOKEN_VERSION

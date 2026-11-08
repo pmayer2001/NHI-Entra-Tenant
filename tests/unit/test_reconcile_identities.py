@@ -1,6 +1,6 @@
-"""Phase 3: blueprints, agent identities, SP-backend NHIs and role grants (fake tenant).
+"""Reconciler: blueprints, agent identities, SP-backend NHIs and role grants (fake tenant).
 
-Acceptance (CLAUDE.md §12): after apply, a second plan shows no changes.
+Acceptance: after apply, a second plan shows no changes.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ REGISTRY, _ = load_registry(Path(__file__).parents[2] / "registry")
 RESOURCE = REGISTRY.resources["res-sensitive-records"]
 TODAY = date(2026, 11, 1)
 SPONSOR = "paul@tenant.example"  # the loader's offline placeholder domain
-DEPARTING = "test-departing-sponsor@tenant.example"  # wf-lifecycle-test (Phase 6)
+DEPARTING = "test-departing-sponsor@tenant.example"  # wf-lifecycle-test
 CLIENTS = {"nhigov-scanner": "scanner-app", "nhigov-provisioner": "provisioner-app"}
 SUMMARIZER = "wf-claims-triage/agent-summarizer"
 ROUTER = "wf-claims-triage/agent-router"
@@ -287,7 +287,7 @@ def test_foreign_credential_is_reported_not_replaced(cert_dir: Path, tmp_path: P
     bp["keyCredentials"] = [{"customKeyIdentifier": "c29tZW9uZSBlbHNl", "displayName": "?"}]
     p = plan(state, cert_dir)
     assert p.steps == []
-    assert any("rotation is a Phase 6" in n for n in p.notes)
+    assert any("lifecycle action" in n for n in p.notes)
 
 
 @respx.mock

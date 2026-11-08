@@ -45,7 +45,7 @@ Mitigations to evaluate:
 
 **Spike results** (`docs/spikes/agent-id-token-spike-results.md`):
 - **Confirmed:** one blueprint certificate obtained tokens as agent A *and* agent B. The blast radius is the whole blueprint.
-- **Also (Phase 4/5):** the boundary between blueprints holds (another blueprint's agent: `AADSTS7002134` at T2), but every blueprint principal holds a system-managed Graph `AgentIdentity.CreateAsManager` grant that can't be revoked. So a stolen blueprint key can also *create* agent identities, not just act as existing ones. Discovery watches for any other grant on a blueprint (NHI-007).
+- **Also (live authz tests and discovery):** the boundary between blueprints holds (another blueprint's agent: `AADSTS7002134` at T2), but every blueprint principal holds a system-managed Graph `AgentIdentity.CreateAsManager` grant that can't be revoked. So a stolen blueprint key can also *create* agent identities, not just act as existing ones. Discovery watches for any other grant on a blueprint (NHI-007).
 - **Confirmed:** a T1 minted with `fmi_path=A` was **refused** when presented to become agent B (`AADSTS7002142`). Entra binds T1 to one agent: T1's `sub` claim encodes `/t/<tenant>/a/<blueprint appId>/<agent id>`. So the exposure is the blueprint *credential*, not a leaked T1 (a leaked T1 reaches one agent, for its short lifetime).
 - **The resource sees the agent, not the blueprint:** T2's `appid`, `oid` and `sub` are all the agent identity, so per-agent authorization (P3/P4) works as designed. T2 also carries `xms_par_app_azp`, which looks like the parent blueprint. A resource could log it to tie every agent call back to its blueprint (to verify when we build the Sensitive API).
 

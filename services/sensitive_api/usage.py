@@ -1,8 +1,8 @@
-"""Usage log: one JSON line per request (CLAUDE.md section 9, L3).
+"""Usage log: one JSON line per request (ADR-007, L3).
 
 An app-only token carries every granted role on every call, so only the
 resource knows which role was actually exercised. This log is that evidence;
-Phase 7 computes granted - used from it. Denied calls are logged too.
+`nhigov usage analyze` computes granted - used from it. Denied calls are logged too.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ class UsageEvent:
     appid: str | None = None
     oid: str | None = None
     idtyp: str | None = None
-    # xms_par_app_azp, when the token carries it. Observed (Phase 4): v2 tokens for this
+    # xms_par_app_azp, when the token carries it. Observed in live tests: v2 tokens for this
     # API don't, so blueprint attribution is done from nhigov's state, not here.
     blueprint_appid: str | None = None
     role_used: str | None = None  # the route's required role, only when allowed

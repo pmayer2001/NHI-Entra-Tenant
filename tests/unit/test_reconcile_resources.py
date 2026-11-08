@@ -1,6 +1,6 @@
 """Resource plan/apply against an in-memory fake tenant.
 
-The Phase 3 acceptance test in miniature: apply, then plan again -> no changes.
+The reconciler's acceptance test in miniature: apply, then plan again -> no changes.
 The fake returns objects the way Graph does (extra fields, defaults filled in),
 so a diff that compares naively would never converge.
 """

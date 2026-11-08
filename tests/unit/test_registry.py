@@ -1,4 +1,4 @@
-"""Registry validation (Phase 1 acceptance: valid passes, each kind of invalid fails).
+"""Registry validation (valid passes, each kind of invalid fails).
 
 Each case copies the real `registry/` folder, breaks exactly one thing, and
 asserts the expected rule fires. Using the real registry as the baseline means

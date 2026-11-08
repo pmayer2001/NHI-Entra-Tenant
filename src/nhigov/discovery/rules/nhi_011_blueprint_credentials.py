@@ -18,7 +18,8 @@ def check(inv: Inventory, ctx: ScanContext) -> Iterator[tuple[Nhi, str]]:
 RULE = Rule(
     "NHI-011", "Blueprint with too many credentials", Severity.MEDIUM,
     "Whoever holds any blueprint credential can get tokens for every agent identity under "
-    "it (verified in Phase 0). Each extra credential is another place that key can leak.",
+    "it (verified by the Agent ID token spike). Each extra credential is another place that "
+    "key can leak.",
     "Keep one credential per runtime; remove the rest. Split agents into separate "
     "blueprints if they run in different trust zones.",
     check,

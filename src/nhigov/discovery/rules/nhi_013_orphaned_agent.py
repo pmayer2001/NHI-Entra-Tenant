@@ -16,7 +16,7 @@ def check(inv: Inventory, ctx: ScanContext) -> Iterator[tuple[Nhi, str]]:
 
 RULE = Rule(
     "NHI-013", "Orphaned agent identity", Severity.HIGH,
-    "Deleting a blueprint didn't cascade to its agent identities (Phase 0 spike). The "
+    "Deleting a blueprint didn't cascade to its agent identities (Agent ID token spike). The "
     "orphans can't get tokens, but they keep their role assignments and sponsors, and "
     "would work again if the blueprint were restored.",
     "Delete the orphaned agent identity (agents first, then the blueprint, when retiring).",

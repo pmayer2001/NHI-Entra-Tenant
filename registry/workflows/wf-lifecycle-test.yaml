@@ -1,4 +1,4 @@
-# Phase 6 acceptance (CLAUDE.md §8): sponsor an NHI with a test user, disable the user,
+# Lifecycle test (ADR-012): sponsor an NHI with a test user, disable the user,
 # run the lifecycle, and the NHI must end up disabled after the sponsor grace period.
 kind: Workflow
 id: wf-lifecycle-test

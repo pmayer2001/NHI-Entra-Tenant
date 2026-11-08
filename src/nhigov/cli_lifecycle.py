@@ -3,7 +3,7 @@
 Reads run as the scanner. Writes (disable, delete, policy PATCH, key PATCH) run as
 the provisioner; with --method addkey-self, addKey/removeKey run as the rotated
 object itself.
-All writes need --execute and a confirmation (CLAUDE.md §14).
+All writes need --execute and a confirmation.
 """
 
 from __future__ import annotations

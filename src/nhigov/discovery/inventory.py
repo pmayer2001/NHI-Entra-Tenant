@@ -4,7 +4,7 @@ One record per identity: an app registration and its service principal are one
 NHI (the app holds credentials, the SP holds grants), and a blueprint plus its
 blueprint principal are one blueprint.
 
-Classification (§7):
+Classification (ADR-011):
   managed                 nhigov knows it (state file, or a control-plane client ID)
   microsoft-first-party   owned by Microsoft's tenant
   third-party-consented   owned by another organization, consented into this one

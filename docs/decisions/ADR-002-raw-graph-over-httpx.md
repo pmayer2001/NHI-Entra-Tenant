@@ -1,6 +1,6 @@
 # ADR-002: Python + raw Microsoft Graph over httpx, not `msgraph-sdk`
 
-**Status:** Accepted (Phase 0). Implemented in `src/nhigov/graph/client.py`.
+**Status:** Accepted. Implemented in `src/nhigov/graph/client.py`.
 
 ## Context
 Every component (reconciler, discovery, lifecycle, probe) talks to Microsoft Graph. Agent ID object types are new, and their URLs use OData *typed casts* such as `/applications/microsoft.graph.agentIdentityBlueprint`.

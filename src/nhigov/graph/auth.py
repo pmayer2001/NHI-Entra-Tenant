@@ -51,7 +51,7 @@ class CertificateTokenProvider:
     """App-only Graph token for one control-plane app, backed by a PEM certificate.
 
     `.default` asks for every *application permission* already admin-consented to
-    the app: app-only tokens cannot request a subset (see learning notes).
+    the app: app-only tokens cannot request a subset (ADR-007).
     """
 
     def __init__(

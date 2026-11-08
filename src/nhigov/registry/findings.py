@@ -1,4 +1,4 @@
-"""A validation finding. Same shape the Phase 5 discovery rules will use."""
+"""A validation finding. Discovery findings use the same shape."""
 
 from __future__ import annotations
 

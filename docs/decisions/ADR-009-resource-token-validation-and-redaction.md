@@ -1,6 +1,6 @@
 # ADR-009: How the Sensitive Records API validates tokens and redacts data
 
-**Status:** Accepted for the offline build (Phase 2, 2026-10-31). The token version and audience are confirmed when the resource app is registered (Phase 2, Part A).
+**Status:** Accepted (2026-10-31). The token version and audience were confirmed when the resource app was registered (`docs/spikes/resource-registration-probe.md`).
 
 ## Context
 ADR-004 puts data-level least privilege in the resource. Entra issues a token listing the caller's app roles. Everything after that is the resource's job: deciding whether to trust the token, whether the role covers the route, and which fields to return. A mistake in any of those leaks data no matter how carefully the roles were granted.
@@ -25,6 +25,6 @@ ADR-004 puts data-level least privilege in the resource. Entra issues a token li
 `nhigov api probe` (results in `docs/spikes/resource-registration-probe.md`) showed: Microsoft has enabled `uriAdditionWithoutUniqueTenantIdentifier` on this tenant, with v2-token apps exempt; `nonDefaultUriAddition` is off. **Decision: the app is registered with `requestedAccessTokenVersion: 2`**, which keeps `api://nhigov-sensitive-records` legal and makes `aud` the appId. Fallback if the exemption is ever removed: `api://<appId>`, set right after creation. The service principal sets `appRoleAssignmentRequired: true`. App role IDs are UUID5 values derived from `resource id/role value`, so re-running `apply` produces the same IDs.
 
 ## Consequences
-- Confirmed with real agent tokens (Phase 4): `aud` is the appId, `iss` is v2, `idtyp: app` is present, and `roles` is exactly the registry's grants. v2 tokens do **not** carry `xms_par_app_azp`, so the usage log's `blueprint_appid` is empty for agents; Phase 7 attributes calls to blueprints through nhigov's state (agent appId -> blueprint).
+- Confirmed with real agent tokens (`tests/authz`): `aud` is the appId, `iss` is v2, `idtyp: app` is present, and `roles` is exactly the registry's grants. v2 tokens do **not** carry `xms_par_app_azp`, so the usage log's `blueprint_appid` is empty for agents; usage analytics attributes calls to blueprints through nhigov's state (agent appId -> blueprint).
 - The fake data uses SSN area number `000`, which the SSA has never issued, so no value in the repo can be a real SSN.
 - Notes are kept in memory only and are lost on restart. Persistence isn't the point of the mock.

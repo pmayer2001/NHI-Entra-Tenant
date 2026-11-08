@@ -1,6 +1,6 @@
 # ADR-004: Data-level least privilege lives in the resource, via app-only roles
 
-**Status:** Accepted (Phase 0). Implemented in Phase 2.
+**Status:** Accepted. Implemented in `services/sensitive_api/`.
 
 ## Context
 P4 requires NHI roles that restrict *data*, not just *systems*. Entra directory roles govern the directory itself (users, apps, policies), not business records. Once a token reaches an API, only that API can decide which fields to return.
@@ -25,9 +25,9 @@ The API validates the JWT (signature via the tenant's JWKS, `iss`, `aud`, `exp`)
 - **One shared role set**: one mis-assignment exposes PII to an agent.
 - **Scopes (delegated permissions)**: agents here run autonomously with no signed-in user. Scopes describe what an app may do *on behalf of a user*, so they're the wrong primitive.
 
-## Amendment (Phase 5, 2026-11-01): `allowedMemberTypes` isn't enforced by Graph
+## Amendment (2026-11-01, found by discovery seeding): `allowedMemberTypes` isn't enforced by Graph
 Seed S9 assigned `Records.Read.All` (`allowedMemberTypes: ["User"]`) to a service principal with `POST /servicePrincipals/{id}/appRoleAssignments`, app-only with `AppRoleAssignment.ReadWrite.All`, and Graph **accepted** it. P4 therefore rests on layers we own, not on the IdP flag:
-1. **The API**: human routes require a user token (`idtyp`/`scp`), so an app holding `Records.Read.All` still gets 403 (unit-tested since Phase 2).
+1. **The API**: human routes require a user token (`idtyp`/`scp`), so an app holding `Records.Read.All` still gets 403 (unit-tested in `tests/unit/test_sensitive_api.py`).
 2. **The registry**: REG-006 rejects any grant of a non-Application role to an NHI.
 3. **The reconciler**: `apply` revokes roles the registry doesn't declare on managed resources.
 4. **Discovery**: NHI-009 flags any NHI holding a User-assignable role (found the seed live).

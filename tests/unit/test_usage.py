@@ -1,4 +1,4 @@
-"""L3 usage analytics (Phase 7): granted - used, scaled by expected cadence (NHI-012)."""
+"""L3 usage analytics: granted - used, scaled by expected cadence (NHI-012)."""
 
 from __future__ import annotations
 

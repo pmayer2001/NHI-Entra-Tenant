@@ -1,10 +1,10 @@
 """Entra Agent ID backend: blueprint per agent definition, agent identity per NHI.
 
-Request shapes come from the Phase 0 spike, which created exactly these objects:
+Request shapes come from the Agent ID token spike, which created exactly these objects:
 blueprint (POST /applications with @odata.type), certificate (PATCH on the
 typed-cast URL), blueprint principal, then agent identities from the blueprint.
 
-Agent identities can't be tagged (Phase 0, W04), so one found by name is only
+Agent identities can't be tagged (capability probe W04), so one found by name is only
 adopted when it was created from *our* blueprint: name alone isn't proof.
 """
 
@@ -28,7 +28,7 @@ def credential_notes(
     ctx: PlanContext, cert_name: str, current: list[JsonDict], label: str
 ) -> tuple[JsonDict | None, list[str]]:
     """(keyCredentials body to upload, or None; notes). Uploads only when there's no
-    credential yet: replacing one is rotation, a lifecycle action (§8, Phase 6)."""
+    credential yet: replacing one is rotation, a lifecycle action (ADR-012)."""
     cert = load_local_cert(cert_name, ctx.cert_dir)
     if cert is None:
         return None, [
@@ -52,7 +52,7 @@ def credential_notes(
         return None, [
             *notes,
             f"{label}: has a credential that isn't the local certificate; rotation is a "
-            "Phase 6 lifecycle action, so plan leaves it alone",
+            "lifecycle action (`nhigov lifecycle rotate`), so plan leaves it alone",
         ]
     return {"keyCredentials": [key_credential(cert, LOCAL_RUNTIME_LABEL)]}, notes
 

@@ -41,7 +41,7 @@ class Finding(BaseModel):
 
     @property
     def key(self) -> str:
-        """Stable identity for dedupe (one GitHub issue per key in Phase 8)."""
+        """Stable identity for dedupe (one GitHub issue per key)."""
         return f"{self.rule}:{self.object_id}"
 
 

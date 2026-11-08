@@ -1,4 +1,4 @@
-# Phase 7 acceptance (CLAUDE.md §12): a deliberately over-granted agent must be flagged.
+# Usage analytics demo (ADR-013): a deliberately over-granted agent must be flagged.
 # The summarizer only ever reads single records (Records.Read.Redacted). It was first
 # granted Records.Read.Metadata too: within its max_permissions, so validation allowed
 # it, but nothing it does needs it. `nhigov usage analyze` flagged it on 2026-11-06

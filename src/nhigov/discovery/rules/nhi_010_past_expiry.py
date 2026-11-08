@@ -24,6 +24,6 @@ RULE = Rule(
     "Expiry and review dates are how temporary access stays temporary. An NHI working past "
     "them is running on an approval that has lapsed (P6).",
     "Review and renew the workflow in the registry (new dates), or retire it; the lifecycle "
-    "engine (Phase 6) disables it after the grace period.",
+    "engine (`nhigov lifecycle run`) disables it after the grace period.",
     check,
 )  # fmt: skip

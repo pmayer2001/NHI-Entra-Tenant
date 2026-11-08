@@ -1,4 +1,4 @@
-# The mock Sensitive Records API (Phase 2). Human and agent roles are separate
+# The mock Sensitive Records API. Human and agent roles are separate
 # sets: Entra refuses to assign a role to a member type not listed here (P4, ADR-004).
 kind: Resource
 id: res-sensitive-records

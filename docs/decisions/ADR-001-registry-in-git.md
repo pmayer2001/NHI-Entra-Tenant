@@ -1,6 +1,6 @@
 # ADR-001: Registry in git as YAML, not in Entra
 
-**Status:** Accepted (Phase 0)
+**Status:** Accepted
 
 ## Context
 Every AI use case must be a registered application (P1) with business metadata: owner, sponsor, data classification, expiry, review date and expected cadence. Something has to be the source of truth for that, and for which identities and permissions *should* exist.

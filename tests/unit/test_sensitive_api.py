@@ -1,8 +1,8 @@
-"""Sensitive Records API (Phase 2 acceptance: unit tests with locally signed tokens).
+"""Sensitive Records API: unit tests with locally signed tokens.
 
 Tokens are signed with a throwaway RSA key whose public half is served as a
 fake JWKS, so every check (signature, iss, aud, exp, roles) runs for real
-without a tenant. Phase 4 repeats the role checks with real Entra tokens.
+without a tenant. tests/authz repeats the role checks with real Entra tokens.
 """
 
 from __future__ import annotations

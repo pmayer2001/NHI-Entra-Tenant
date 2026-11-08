@@ -1,14 +1,14 @@
 # ADR-006: Plan/apply reconciler, disable before delete
 
-**Status:** Accepted (Phase 0). Implemented in Phase 3.
+**Status:** Accepted. Implemented in `src/nhigov/reconcile/` (ADR-010).
 
 ## Context
-Tenant mutations must be reviewable and safe to repeat. CLAUDE.md §14 requires a plan first, with Paul's confirmation before any write.
+Tenant mutations must be reviewable and safe to repeat. Every write is shown as a plan first and needs the operator's confirmation.
 
 ## Decision
 - `nhigov plan` diffs the registry against the tenant and prints create / update / disable / delete actions. It's read-only and runs as the scanner (ADR-005).
 - `nhigov apply` executes a **saved** plan as the provisioner. Running it twice does nothing the second time.
-- Deletes happen only through the lifecycle state machine (§8): disable → grace period → soft-delete → purge.
+- Deletes happen only through the lifecycle state machine (ADR-012): disable → grace period → soft-delete → purge.
 
 ## Correlating registry entries with Entra objects
 Primary: `state/tenant-state.json`, which maps registry IDs to Entra object IDs (no secrets; committed).

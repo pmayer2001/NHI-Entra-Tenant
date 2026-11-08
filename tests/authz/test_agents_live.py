@@ -123,7 +123,7 @@ def test_real_token_carries_exactly_the_declared_roles(live: Live, key: str) -> 
     rec = live.state.nhis[key]
     assert claims["aud"] == live.state.resources[RESOURCE_ID].app_id  # v2: aud is the appId
     assert claims["iss"].endswith("/v2.0")
-    assert claims.get("idtyp") == "app"  # the optional claim requested in Phase 2
+    assert claims.get("idtyp") == "app"  # the optional claim the API's app registration requests
     assert set(claims.get("roles", [])) == granted(key)
     assert claims["oid"] == rec.principal_id
     assert claims["azp"] == rec.app_id  # the agent itself, not its blueprint

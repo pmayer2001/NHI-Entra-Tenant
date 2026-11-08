@@ -11,7 +11,7 @@ expires: 2027-04-30
 review_by: 2027-01-31
 agents:
   - ref: nhigov-scanner
-    runtimes: [local, github-actions]   # nightly scan in CI (Phase 8)
+    runtimes: [local, github-actions]   # nightly scan in CI
     expected_cadence: daily
     permissions:
       - resource: microsoft-graph

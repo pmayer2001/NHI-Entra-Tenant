@@ -1,7 +1,7 @@
 """The humans behind NHIs (owners, sponsors) and whether they can still be accountable.
 
 A sponsor whose account is disabled or deleted is the classic orphaning path:
-the NHI keeps working while nobody answers for it (NHI-002, lifecycle §8).
+the NHI keeps working while nobody answers for it (NHI-002, ADR-012).
 """
 
 from __future__ import annotations

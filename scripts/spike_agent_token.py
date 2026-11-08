@@ -1,4 +1,4 @@
-"""Phase 0 spike: one blueprint, two agent identities, real tokens (ADR-003).
+"""Agent ID token spike: one blueprint, two agent identities, real tokens (ADR-003).
 
 Tests three claims about the Agent ID token flow on this tenant:
   1. A blueprint's certificate can get a token AS an agent identity (T1 -> T2).

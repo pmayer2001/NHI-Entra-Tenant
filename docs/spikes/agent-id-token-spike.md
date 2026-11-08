@@ -1,6 +1,6 @@
 # Spike: one blueprint → one agent identity → one token
 
-**Goal:** confirm by hand the autonomous-agent token flow that ADR-003's blast-radius argument depends on, and record exactly what worked. Run this only if probe W01–W03 are **OK**, and only after confirming the Graph writes in the session (CLAUDE.md §14.1).
+**Goal:** confirm by hand the autonomous-agent token flow that ADR-003's blast-radius argument depends on, and record exactly what worked. Run this only if probe W01–W03 are **OK**, and only after confirming the Graph writes in the session.
 
 Source of the expected flow: Microsoft Learn, *Request agent tokens for autonomous agents* and *Create an agent identity blueprint* (read 2026-10-31).
 
@@ -50,4 +50,4 @@ It writes `docs/spikes/agent-id-token-spike-results.md` (claims only, IDs labell
 | Any permission needed beyond ADR-005's list? | No |
 | Surprises | Agent creation needed retries (~15s replication lag). **Blueprint delete did not cascade** to agent identities; deleted them explicitly. |
 
-If anything differs from ADR-003, stop, record it in `docs/learning-notes.md`, and propose an ADR change (CLAUDE.md §14.7).
+If anything differs from ADR-003, stop, record it, and propose an ADR change.

@@ -1,4 +1,4 @@
-"""Plan and apply for resource APIs (Phase 2 slice of the reconciler, ADR-006).
+"""Plan and apply for resource APIs (the resource part of the reconciler, ADR-006).
 
 `plan_resource` only reads (run it as the scanner). `apply_plan` executes the
 actions (run it as the provisioner). Applying a plan, then planning again,
@@ -28,7 +28,7 @@ from nhigov.registry.models import Resource
 APP_SELECT = "id,appId,displayName,identifierUris,signInAudience,tags,api,appRoles,optionalClaims"
 SP_SELECT = "id,appId,appRoleAssignmentRequired,tags"
 APP_ID_PLACEHOLDER = "<appId from create>"
-# A just-created app (or its owner link) may not have replicated yet (Phase 0 finding).
+# A just-created app (or its owner link) may not have replicated yet (ADR-002).
 LAG_BACKOFF = (2.0, 4.0, 8.0, 16.0)
 
 JsonDict = dict[str, Any]

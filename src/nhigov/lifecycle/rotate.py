@@ -1,4 +1,4 @@
-"""Certificate rotation without downtime (CLAUDE.md §8): add new, verify, then remove old.
+"""Certificate rotation without downtime (ADR-012): add new, verify, then remove old.
 
 Never remove first. addKey/removeKey need a proof of possession signed by a key
 the object already has, so rotation must happen while the current certificate

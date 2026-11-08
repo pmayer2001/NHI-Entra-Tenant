@@ -3,14 +3,14 @@
 It reproduces behaviour seen on the live tenant (or documented), because a fake
 that's kinder than Entra lets a non-converging reconciler pass:
 * objects come back with extra fields and defaults filled in;
-* a new service principal gets its application's tags, whatever was sent (Phase 2);
+* a new service principal gets its application's tags, whatever was sent;
 * keyCredentials come back without `key`, identified by `customKeyIdentifier`;
 * an enabled app role can't be deleted;
 * reading sponsors needs AgentIdentity.ReadWrite.All, which the scanner lacks (403);
 * agent identities have no tags, and appId == id;
 * objects created seconds ago can be "not found" (configurable lag);
 * a new blueprint principal is granted Graph AgentIdentity.CreateAsManager, and that
-  grant can't be deleted (system-managed, Phase 5).
+  grant can't be deleted (system-managed).
 """
 
 from __future__ import annotations
@@ -200,7 +200,7 @@ class FakeTenant:
                 return _error(400, "Request_BadRequest", "blueprint does not exist")
             oid = str(uuid.uuid4())
             self.sps[oid] = {"id": oid, "appId": app_id, "kind": "blueprintPrincipal", "tags": []}
-            # Observed live (Phase 5): Entra grants every new blueprint principal this role.
+            # Observed live: Entra grants every new blueprint principal this role.
             graph = self.sps.get("graph-sp", {})
             if any(r["value"] == AUTO_GRANT for r in graph.get("appRoles", [])):
                 auto = {"id": f"auto-{oid}", "resourceId": "graph-sp"}

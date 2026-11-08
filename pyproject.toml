@@ -2,7 +2,7 @@
 name = "nhigov"
 version = "0.1.0"
 description = "NHI governance for agentic workflows on Microsoft Entra ID"
-readme = "CLAUDE.md"
+readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "azure-identity>=1.19",

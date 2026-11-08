@@ -23,6 +23,6 @@ RULE = Rule(
     "A secret is a reusable password: it can be copied from a config file, a log or a "
     "laptop and used from anywhere. Most NHI compromises start with one (P7).",
     "Replace it with a certificate or a federated credential, verify, then remove the "
-    "secret. The tenant app management policy should block new ones (Phase 6).",
+    "secret. The tenant app management policy should block new ones (`nhigov lifecycle policy`).",
     check,
 )  # fmt: skip

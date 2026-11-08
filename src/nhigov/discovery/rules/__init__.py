@@ -1,4 +1,4 @@
-"""Discovery rules (CLAUDE.md §7), one module per rule.
+"""Discovery rules (ADR-011), one module per rule.
 
 NHI-012 needs the API usage log, not the inventory, so it lives in `nhigov.usage`.
 """

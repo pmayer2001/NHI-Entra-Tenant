@@ -39,7 +39,7 @@ class NhiRecord(BaseModel):
     app_id: str | None = None
     application_object_id: str | None = None  # service_principal backend only
     blueprint: str | None = None  # agent_id backend: the agent definition's blueprint
-    # When `apply` created it (Phase 7): usage analytics doesn't judge an NHI on time
+    # When `apply` created it: usage analytics (ADR-013) doesn't judge an NHI on time
     # before it existed. None for NHIs created before this field was added.
     created_at: datetime | None = None
 

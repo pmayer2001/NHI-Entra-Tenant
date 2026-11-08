@@ -2,7 +2,7 @@
 
 Read checks run as `nhigov-scanner`. Write checks run as `nhigov-provisioner` and
 mutate the tenant, so they only execute with --execute after Paul confirms
-(CLAUDE.md §14.1); otherwise they come back as PLANNED. Every object the write
+(the operator confirms every write); otherwise they come back as PLANNED. Every object the write
 sequence creates is named `nhigov-probe-*` and deleted in a finally block.
 
 Steps that act on an object created seconds earlier retry with backoff: the
@@ -107,7 +107,7 @@ def planned_write_checks(sponsor_id: str, run_id: str) -> list[Check]:
         _w(
             "W06", "App management policy write (no-op)", "PATCH",
             "policies/defaultAppManagementPolicy",
-            "Tenant-wide 'no secrets' enforcement on Free (§8, P7)",
+            "Tenant-wide 'no secrets' enforcement on Free (ADR-012, P7)",
             {"isEnabled": "<current value>"},
         ),
         _w(
@@ -207,7 +207,7 @@ def run_write_checks(
     finally:
         # Deletes use the plain path: on 2026-10-31 the documented typed-cast DELETE
         # returned 403 for an app-only caller holding DeleteRestore.All, while
-        # DELETE /applications/{id} returned 204 (see learning notes).
+        # DELETE /applications/{id} returned 204 (ADR-005).
         if agent_obj_id:
             run("C01", retry_on=_LAG, path=f"servicePrincipals/{agent_obj_id}")
         else:

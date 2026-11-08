@@ -52,11 +52,11 @@ from nhigov.registry.validate import validate_registry
 app = typer.Typer(no_args_is_help=True, help="NHI governance for agentic workflows (Entra ID).")
 cert_app = typer.Typer(no_args_is_help=True, help="Local certificate credentials (P7: no secrets).")
 app.add_typer(cert_app, name="cert")
-agent_app = typer.Typer(no_args_is_help=True, help="Run the deterministic agent stubs (Phase 4).")
+agent_app = typer.Typer(no_args_is_help=True, help="Run agent stubs as their NHIs.")
 app.add_typer(agent_app, name="agent")
 app.add_typer(lifecycle_app, name="lifecycle")
 app.add_typer(usage_app, name="usage")
-api_app = typer.Typer(no_args_is_help=True, help="The mock Sensitive Records API (Phase 2).")
+api_app = typer.Typer(no_args_is_help=True, help="The mock Sensitive Records API.")
 app.add_typer(api_app, name="api")
 
 ConfigOpt = Annotated[Path, typer.Option("--config", help="Path to config.yaml")]
@@ -107,7 +107,7 @@ def probe(
     yes: Annotated[bool, typer.Option("--yes", help="Skip the confirmation prompt")] = False,
     output: Annotated[Path, typer.Option()] = Path("docs/capability-matrix.md"),
 ) -> None:
-    """Record which Graph capabilities this tenant supports (CLAUDE.md section 10).
+    """Record which Graph capabilities this tenant supports (docs/capability-matrix.md).
 
     Read checks always run. Write checks are printed as a plan unless --execute is given.
     """
@@ -176,7 +176,7 @@ def validate(
         bool, typer.Option("--online", help="Also check sponsors/owners exist (read-only)")
     ] = False,
 ) -> None:
-    """Validate the registry (CLAUDE.md section 6). Exits 1 if there are errors."""
+    """Validate the registry (ADR-008). Exits 1 if there are errors."""
     domain = load_tenant_domain(config_path)
     if online and not domain:
         raise typer.BadParameter("--online needs tenant_domain in config.yaml")

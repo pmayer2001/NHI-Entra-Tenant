@@ -7,7 +7,7 @@ Two restrictions, on applications and service principals alike:
 
 A PATCH replaces each restriction list it sends, so the current policy is read
 first and our entries are merged into it: restrictions Microsoft or an admin set
-(like the identifier-URI rule seen in Phase 2) are kept.
+(like Microsoft's identifier-URI rule) are kept.
 """
 
 from __future__ import annotations

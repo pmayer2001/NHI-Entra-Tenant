@@ -23,7 +23,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
 DEFAULT_CERT_DIR = Path("~/.nhigov/certs")
-DEFAULT_LIFETIME_DAYS = 180  # matches the app management policy cap (CLAUDE.md §8)
+DEFAULT_LIFETIME_DAYS = 180  # matches the app management policy cap (ADR-012)
 
 
 @dataclass(frozen=True)

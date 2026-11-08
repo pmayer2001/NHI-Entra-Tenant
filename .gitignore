@@ -1,4 +1,4 @@
-# --- Secrets: never commit (CLAUDE.md §14.5) ---
+# --- Secrets: never commit ---
 *.pem
 *.key
 *.pfx

@@ -1,5 +1,5 @@
 # Global governance rules. Validated by `nhigov validate`; enforced by the
-# reconciler (Phase 3), discovery (Phase 5) and lifecycle (Phase 6).
+# reconciler, discovery and lifecycle engine.
 kind: Policy
 
 # Graph application permissions that can escalate privilege or touch data
@@ -22,8 +22,8 @@ high_risk_permissions:
   - AgentIdentityBlueprint.ReadWrite.All
 
 max_workflow_lifetime_days: 365     # expires at most 12 months out (P6)
-max_credential_lifetime_days: 180   # matches the app management policy cap (§8)
-sponsor_grace_days: 14              # sponsor disabled -> NHI disabled after this (§8)
+max_credential_lifetime_days: 180   # matches the app management policy cap (ADR-012)
+sponsor_grace_days: 14              # sponsor disabled -> NHI disabled after this (ADR-012)
 retirement_grace_days: 14           # retired -> soft-deleted after this
 expiry_notice_days: 14              # "expiring" state starts this long before expires
 max_blueprint_credentials: 2        # NHI-011: one per runtime (local, github-actions)

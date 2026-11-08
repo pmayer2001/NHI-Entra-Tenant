@@ -1,4 +1,4 @@
-"""How an NHI gets a token for a resource, on either backend (ADR-003, Phase 0 spike).
+"""How an NHI gets a token for a resource, on either backend (ADR-003, Agent ID token spike).
 
 Agent ID: the agent identity has no credential. The *blueprint* proves possession
 of its certificate and asks for an exchange token bound to one agent (T1, via

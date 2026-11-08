@@ -1,1 +1,1 @@
-"""License and capability probe (CLAUDE.md §10). Its output decides ADR-003's backend."""
+"""License and capability probe (docs/capability-matrix.md). It decides ADR-003's backend."""

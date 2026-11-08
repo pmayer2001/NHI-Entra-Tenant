@@ -1,4 +1,4 @@
-"""Phase 6: lifecycle engine, executor, policy merge, rotation and the proof token.
+"""Lifecycle engine, executor, policy merge, rotation and the proof token.
 
 Time is a parameter (`today`), so 14-day grace periods are tested in milliseconds.
 """

@@ -6,11 +6,11 @@
     uv run python scripts/seed_mess.py verify               # every seed found, nothing else
     uv run python scripts/seed_mess.py cleanup --execute    # removes everything it planted
 
-Phase 5 acceptance (CLAUDE.md §12): every seeded problem is found, and nothing else.
+Acceptance test for discovery: every seeded problem is found, and nothing else.
 `plant` records a baseline scan first, so "nothing else" means nothing beyond what
 was already there.
 
-Safety (CLAUDE.md §14): writes need --execute plus confirmation, run as the
+Safety: writes need --execute plus confirmation, run as the
 provisioner. Every app is tagged `nhigov:seed` (agent identities can't be tagged,
 so they're named `seed-...`). The one client secret expires in 6 days and its value
 is discarded unread. Certificates are public keys only: no private key is kept, so
@@ -171,7 +171,7 @@ class Planter:
                 {"passwordCredential": {"displayName": "seed (6 days)", "endDateTime": end}},
             )
         except GraphError as exc:
-            # Phase 6: the tenant app management policy blocks new secrets. That's P7
+            # The tenant app management policy, if applied, blocks new secrets. That's P7
             # prevented rather than detected, so there's no NHI-003 to find.
             self.s.evidence["S1"] = f"secret refused by policy: {exc.status} {exc.code}"
             self.expect("001 002", sp, "seed-secret-app")
@@ -291,7 +291,7 @@ def plant(
         sponsor = scanner.get(f"users/paul@{cfg.tenant_domain}", params={"$select": "id"})["id"]
         Planter(cfg, prov, scanner, s).plant(sponsor)
     typer.secho(
-        "\nManual step for S4 (the provisioner may not assign directory roles, §14.3):\n"
+        "\nManual step for S4 (the provisioner may not assign directory roles, ADR-005):\n"
         "  Entra admin center > Identity > Roles & admins > Directory Readers >\n"
         "  Add assignments > select the enterprise app 'seed-dir-role' > Add.\n"
         "Then: uv run nhigov scan, and uv run python scripts/seed_mess.py verify",
@@ -322,7 +322,7 @@ def verify(
         typer.secho(f"\n{len(missing)} missing, {len(unexpected)} unexpected", fg="red")
         raise typer.Exit(1)
     typer.secho(f"\nAll {len(expected)} seeded findings found, nothing else. "
-                "Phase 5 acceptance met.", fg="green")  # fmt: skip
+                "Discovery acceptance met.", fg="green")  # fmt: skip
 
 
 @app.command()

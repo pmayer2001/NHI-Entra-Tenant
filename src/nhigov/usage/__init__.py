@@ -1,1 +1,1 @@
-"""Unused-permission analytics (CLAUDE.md §9, ADR-007). Phase 7 implements L3."""
+"""Unused-permission analytics (ADR-007, ADR-013): the L3 level."""

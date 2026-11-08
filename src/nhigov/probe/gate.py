@@ -6,7 +6,7 @@ any client without an app role assignment on the API, before a token exists.
 The API's own 403s are the second gate; this is the first.
 
 Uses the control-plane identities as the "unassigned clients": neither holds a
-role on the API, and they're the only credentials we have before Phase 3.
+role on the API, and they're the only credentials that exist before the reconciler creates NHIs.
 """
 
 from __future__ import annotations
