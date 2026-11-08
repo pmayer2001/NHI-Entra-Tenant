@@ -108,7 +108,7 @@ class ServicePrincipalBackend:
             "blueprint": None,
         }
         rec = ctx.state.nhis.get(nhi.key)
-        if rec is None or rec.model_dump() != found:
+        if rec is None or rec.model_dump(exclude={"created_at"}) != found:
             plan.steps.append(
                 Step("spnhi.adopt", nhi.key, f"app registration {nhi.name}", "(state only)", found)
             )

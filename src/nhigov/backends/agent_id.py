@@ -254,7 +254,7 @@ class AgentIdBackend:
             "application_object_id": None,
             "blueprint": nhi.agent_id,
         }
-        if rec is None or rec.model_dump() != found:
+        if rec is None or rec.model_dump(exclude={"created_at"}) != found:
             plan.steps.append(
                 Step("agent.adopt", nhi.key, f"agent identity {nhi.name}", "(state only)", found)
             )

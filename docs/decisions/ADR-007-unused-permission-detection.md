@@ -1,6 +1,6 @@
 # ADR-007: Unused-permission detection at three levels
 
-**Status:** Accepted (Phase 0). L3 implemented in Phase 7. L1/L2 depend on probe results R09–R11.
+**Status:** Accepted (Phase 0). L3 implemented in Phase 7: see ADR-013 for how "unused" is decided. L1/L2 depend on probe results R09–R11.
 
 ## Context
 An **app-only token carries every granted app role every time**. The `.default` scope can't request a subset. So Entra's sign-in data can show *that* an NHI authenticated, but never *which* permission it used. Only the resource that checked the `roles` claim knows that.

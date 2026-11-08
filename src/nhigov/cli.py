@@ -20,6 +20,7 @@ from nhigov.agents.identity import NotProvisioned, acquire_token, credentials_fo
 from nhigov.agents.stubs import STUBS
 from nhigov.certs import DEFAULT_CERT_DIR, DEFAULT_LIFETIME_DAYS, generate_self_signed
 from nhigov.cli_lifecycle import lifecycle_app
+from nhigov.cli_usage import usage_app
 from nhigov.config import Config, load_config, load_tenant_domain
 from nhigov.discovery.inventory import Inventory
 from nhigov.discovery.report import write_reports
@@ -54,6 +55,7 @@ app.add_typer(cert_app, name="cert")
 agent_app = typer.Typer(no_args_is_help=True, help="Run the deterministic agent stubs (Phase 4).")
 app.add_typer(agent_app, name="agent")
 app.add_typer(lifecycle_app, name="lifecycle")
+app.add_typer(usage_app, name="usage")
 api_app = typer.Typer(no_args_is_help=True, help="The mock Sensitive Records API (Phase 2).")
 app.add_typer(api_app, name="api")
 

@@ -38,3 +38,8 @@ services/sensitive_api/usage.log
 .idea/
 Thumbs.db
 .DS_Store
+
+# Personal working notes and the build plan: kept local, never published.
+CLAUDE.md
+docs/learning-notes.md
+docs/interview-notes.md

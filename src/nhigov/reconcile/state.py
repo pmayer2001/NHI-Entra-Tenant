@@ -8,6 +8,7 @@ at creation time is the authoritative link. No secrets are ever stored here.
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -38,6 +39,9 @@ class NhiRecord(BaseModel):
     app_id: str | None = None
     application_object_id: str | None = None  # service_principal backend only
     blueprint: str | None = None  # agent_id backend: the agent definition's blueprint
+    # When `apply` created it (Phase 7): usage analytics doesn't judge an NHI on time
+    # before it existed. None for NHIs created before this field was added.
+    created_at: datetime | None = None
 
 
 class TenantState(BaseModel):

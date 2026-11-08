@@ -1,4 +1,7 @@
-"""Discovery rules (CLAUDE.md §7), one module per rule. NHI-012 arrives in Phase 7."""
+"""Discovery rules (CLAUDE.md §7), one module per rule.
+
+NHI-012 needs the API usage log, not the inventory, so it lives in `nhigov.usage`.
+"""
 
 from __future__ import annotations
 

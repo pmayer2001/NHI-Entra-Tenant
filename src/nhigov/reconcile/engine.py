@@ -12,7 +12,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -213,6 +213,7 @@ def _agent_create(g: GraphClient, s: Step, st: TenantState, sl: Any) -> str:
         principal_id=agent["id"],
         app_id=agent["appId"],
         blueprint=_agent_of(s.key),
+        created_at=datetime.now(UTC),
     )
     return f"created agent identity {s.body['displayName']}"
 
@@ -225,7 +226,10 @@ def _agent_set_enabled(g: GraphClient, s: Step, st: TenantState, sl: Any) -> str
 def _spnhi_create(g: GraphClient, s: Step, st: TenantState, sl: Any) -> str:
     app = g.post("applications", s.body)
     st.nhis[s.key] = NhiRecord(
-        backend="service_principal", app_id=app["appId"], application_object_id=app["id"]
+        backend="service_principal",
+        app_id=app["appId"],
+        application_object_id=app["id"],
+        created_at=datetime.now(UTC),
     )
     return f"created app registration {s.body['displayName']}"
 
@@ -251,7 +255,10 @@ def _adopt(g: GraphClient, s: Step, st: TenantState, sl: Any) -> str:
     if s.kind == "blueprint.adopt":
         st.blueprints[s.key] = BlueprintRecord.model_validate(s.body)
     else:
-        st.nhis[s.key] = NhiRecord.model_validate(s.body)
+        old = st.nhis.get(s.key)  # a refresh keeps when apply created it
+        st.nhis[s.key] = NhiRecord.model_validate(s.body).model_copy(
+            update={"created_at": old.created_at if old else None}
+        )
     return f"recorded existing objects for {s.key} in state"
 
 

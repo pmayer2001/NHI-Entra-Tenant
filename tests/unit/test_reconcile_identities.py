@@ -126,9 +126,9 @@ def test_first_plan_creates_in_dependency_order(cert_dir: Path) -> None:
     assert order.index("blueprint.principal") < order.index("agent.create")
     assert order.index("agent.create") < order.index("grant.add")
     assert order.count("blueprint.credential") == 2
-    assert order.count("agent.create") == 3  # claims triage x2, lifecycle test
+    assert order.count("agent.create") == 4  # claims triage x2, lifecycle test, usage demo
     assert order.count("spnhi.create") == 1
-    assert order.count("grant.add") == 5  # summarizer 1, router 2, demo 1, lifecycle 1
+    assert order.count("grant.add") == 6  # summarizer 1, router 2, demo 1, lifecycle 1, usage 1
 
 
 @respx.mock
@@ -212,9 +212,10 @@ def test_suspend_disables_and_reactivate_enables(cert_dir: Path) -> None:
 def test_requested_workflow_creates_nothing(cert_dir: Path) -> None:
     tenant()
     requested = with_workflow(REGISTRY, "wf-claims-triage", status=WorkflowStatus.REQUESTED)
+    requested = with_workflow(requested, "wf-usage-demo", status=WorkflowStatus.REQUESTED)
     p = plan(TenantState(), cert_dir, requested)
-    assert not any(k.startswith("wf-claims-triage/") for _, k in kinds(p))
-    # agent-summarizer is only used by claims triage, so its blueprint isn't created
+    assert not any(k.startswith(("wf-claims-triage/", "wf-usage-demo/")) for _, k in kinds(p))
+    # agent-summarizer is only used by those two, so its blueprint isn't created
     assert not any(k.startswith("blueprint.") and key == "agent-summarizer" for k, key in kinds(p))
 
 
@@ -233,7 +234,14 @@ def test_lost_state_is_adopted_without_writes(cert_dir: Path) -> None:
     assert {k for k, _ in kinds(p)} == {"blueprint.adopt", "agent.adopt", "spnhi.adopt"}
     apply(fresh, cert_dir)
     assert len(t.writes) == writes
-    assert fresh.nhis == state.nhis and fresh.blueprints == state.blueprints
+    assert fresh.blueprints == state.blueprints
+    # Everything comes back except when apply created each NHI: Graph doesn't keep that for us.
+    ignore = {"created_at"}
+    assert {k: r.model_dump(exclude=ignore) for k, r in fresh.nhis.items()} == {
+        k: r.model_dump(exclude=ignore) for k, r in state.nhis.items()
+    }
+    assert all(r.created_at is not None for r in state.nhis.values())
+    assert all(r.created_at is None for r in fresh.nhis.values())
 
 
 @respx.mock
