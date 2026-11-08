@@ -1,6 +1,6 @@
 # ADR-014: GitHub Actions runtime with federated credentials
 
-**Status:** Accepted (2026-11-07). Verified live 2026-11-08: `agent: wf-claims-triage / agent-summarizer` ran in GitHub Actions, signed in through the blueprint's federated credential (an external issuer is accepted on an Agent ID blueprint), and received a token with exactly `Records.Read.Redacted`; the API redacted PII. No secret exists in the repo or in GitHub. The nightly scan's live run is still to be confirmed.
+**Status:** Accepted (2026-11-07). Verified live 2026-11-08: `agent: wf-claims-triage / agent-summarizer` ran in GitHub Actions, signed in through the blueprint's federated credential (an external issuer is accepted on an Agent ID blueprint), and received a token with exactly `Records.Read.Redacted`; the API redacted PII. No secret exists in the repo or in GitHub. The nightly scan, signed in as `nhigov-scanner` through its hand-added federated credential, returned the same inventory and findings as a local scan.
 
 ## Context
 ADR-005 chose certificates for local runs and GitHub OIDC for CI. Agents run where the registry says (`runtimes:`), and CI is where a credential is most often leaked: a secret in a repository or workflow variable is readable by anyone who can change a workflow. A federated credential removes the thing to leak: the job proves who it is with a token GitHub mints for that job only.
@@ -28,4 +28,6 @@ No secret exists to rotate or leak, and the credential is useless outside a job 
 - Replacing a credential (same name, new subject) is remove-then-add; right after the delete Entra can still refuse the name (`409 Request_MultipleObjectsWithSameKeyValue`, observed live), so the add retries with backoff.
 - Renaming the repository no longer changes the subject's IDs but does change its names, so `plan` replaces the credential; the IDs alone are what an attacker can't reproduce.
 - A blueprint used locally and in CI holds two credentials, matching `max_blueprint_credentials: 2`.
+- Configuration mistakes in CI fail loudly. A GitHub variable that doesn't exist reaches the job as an empty string, and a pasted value can carry a trailing newline (observed live: a subject ending in `
+` was accepted by Entra and never matched). Config strips values and treats blank as unset, and a CI scan refuses to run without the tenant domain or the state, which would otherwise report managed NHIs as shadow and their sponsors as missing.
 - Usage logged by the API inside a CI job stays in that job; local usage analytics (ADR-013) doesn't see CI calls.

@@ -132,3 +132,41 @@ def test_github_ids_can_come_from_the_environment(tmp_path: Path) -> None:
         },
     )
     assert cfg.github.subject_repo == "octo@11/nhigov@22"
+
+
+def test_a_ci_scan_without_state_fails_instead_of_calling_everything_shadow(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for k, v in GH_ENV.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("NHIGOV_TENANT_ID", "t")
+    monkeypatch.setenv("NHIGOV_TENANT_DOMAIN", "contoso.example")
+    monkeypatch.delenv(STATE_ENV, raising=False)
+    result = CliRunner().invoke(
+        app,
+        ["scan", "--summary-only", "--config", str(tmp_path / "x"),
+         "--state", str(tmp_path / "missing.json")],
+    )  # fmt: skip
+    assert result.exit_code == 2
+    assert STATE_ENV in result.output and "shadow" in result.output
+
+
+def test_blank_or_padded_environment_values_are_handled(tmp_path: Path) -> None:
+    # GitHub sends a missing variable as ""; a pasted value can end in a newline.
+    cfg = load_config(
+        tmp_path / "none.yaml",
+        {"NHIGOV_TENANT_ID": "t\n", "NHIGOV_TENANT_DOMAIN": "", "NHIGOV_API_AUDIENCE": " aud "},
+    )
+    assert cfg.tenant_id == "t" and cfg.tenant_domain is None
+    assert cfg.sensitive_api is not None and cfg.sensitive_api.audience == "aud"
+
+
+def test_a_ci_scan_without_the_tenant_domain_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for k, v in GH_ENV.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("NHIGOV_TENANT_ID", "t")
+    monkeypatch.setenv("NHIGOV_TENANT_DOMAIN", "")
+    result = CliRunner().invoke(app, ["scan", "--summary-only", "--config", str(tmp_path / "x")])
+    assert result.exit_code == 2 and "NHIGOV_TENANT_DOMAIN" in result.output

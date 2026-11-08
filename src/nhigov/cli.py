@@ -50,7 +50,7 @@ from nhigov.reconcile.engine import IdentityPlan, PlanContext, PlanError, apply_
 from nhigov.reconcile.identities import plan_identities
 from nhigov.reconcile.plan import ResourcePlan, apply_plan, plan_resource
 from nhigov.reconcile.resources import desired_application, desired_service_principal
-from nhigov.reconcile.state import STATE_PATH, TenantState, load_state, save_state
+from nhigov.reconcile.state import STATE_ENV, STATE_PATH, TenantState, load_state, save_state
 from nhigov.registry.findings import Severity
 from nhigov.registry.loader import PLACEHOLDER_DOMAIN, load_registry
 from nhigov.registry.models import Backend, Runtime
@@ -505,6 +505,23 @@ def scan(
     if any(f.severity is Severity.ERROR for f in findings_reg + validate_registry(registry)):
         raise typer.BadParameter("the registry has errors; run `nhigov validate` first")
     state = load_state(state_path)
+    in_github = "ACTIONS_ID_TOKEN_REQUEST_URL" in os.environ
+    if in_github and not cfg.tenant_domain:
+        # Registry sponsors are `user@{tenant_domain}`; with the placeholder domain none
+        # of them exists, and every managed NHI gets NHI-002.
+        raise typer.BadParameter(
+            "NHIGOV_TENANT_DOMAIN is empty or unset in this GitHub environment, so registry "
+            "sponsors can't be resolved. Set it to the value `nhigov ci vars` prints."
+        )
+    if in_github and not (state.resources or state.blueprints or state.nhis):
+        # Without state every managed NHI looks like shadow (NHI-001): a wrong answer,
+        # not a finding. Locally that only happens before the first `apply`; in CI it
+        # means the state variable is missing.
+        raise typer.BadParameter(
+            f"no tenant state: {STATE_ENV} is empty or unset in this GitHub environment, "
+            "so managed NHIs would be reported as shadow. Set it to the JSON that "
+            "`nhigov ci vars` prints."
+        )
     now = datetime.now(UTC)
     inventory = (
         Inventory.load(from_inventory)

@@ -145,6 +145,9 @@ def load_config(path: Path = Path("config.yaml"), env: dict[str, str] | None = N
     if path.exists():
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     for var, key_path in _ENV_OVERRIDES.items():
-        if var in env:
-            _set_path(data, key_path, env[var])
+        # GitHub passes a variable that doesn't exist as "", and pasted values can carry
+        # a trailing newline: strip, and treat blank as unset.
+        value = env.get(var, "").strip()
+        if value:
+            _set_path(data, key_path, value)
     return Config.model_validate(data)
