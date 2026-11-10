@@ -29,7 +29,7 @@ REGISTRY, _ = load_registry(Path(__file__).parents[2] / "registry")
 TENANT = "11111111-1111-1111-1111-111111111111"
 MS = "f8cdef31-a31e-4b4a-93e4-5f571e91255a"
 NOW = datetime(2026, 11, 1, 12, tzinfo=UTC)
-PAUL = {"id": "paul", "@odata.type": "#microsoft.graph.user"}
+OWNER = {"id": "owner", "@odata.type": "#microsoft.graph.user"}
 PROVISIONER = {"id": "prov-sp", "@odata.type": "#microsoft.graph.servicePrincipal"}
 RES = "res-sensitive-records"
 
@@ -51,7 +51,7 @@ def sp(id_: str, name: str, *, local: bool = True, **extra: Any) -> dict[str, An
 def app(sp_: dict[str, Any], **extra: Any) -> dict[str, Any]:
     return {
         "id": f"{sp_['id']}-obj", "appId": sp_["appId"], "displayName": sp_["displayName"],
-        "tags": [], "passwordCredentials": [], "keyCredentials": [], "owners": [PAUL],
+        "tags": [], "passwordCredentials": [], "keyCredentials": [], "owners": [OWNER],
         "federatedIdentityCredentials": [], **extra,
     }  # fmt: skip
 
@@ -79,7 +79,7 @@ def synthetic_tenant() -> tuple[RawTenant, TenantState, dict[str, str]]:
     summarizer = sp(
         "summ", "nhi-wf-claims-triage-agent-summarizer", agentKind="agentIdentity",
         servicePrincipalType="ServiceIdentity", agentIdentityBlueprintId="bp-summ-app",
-        sponsors=[PAUL], appRoleAssignments=[
+        sponsors=[OWNER], appRoleAssignments=[
             assign("res", role_id(RES, "Records.Read.Redacted")),
             assign("res", role_id(RES, "Records.Annotate")),  # drift -> NHI-007
         ],
@@ -106,12 +106,12 @@ def synthetic_tenant() -> tuple[RawTenant, TenantState, dict[str, str]]:
     shared = sp(
         "shared",
         "seed-shared-sp",
-        owners=[PAUL],
+        owners=[OWNER],
         tags=["nhigov:workflow=wf-claims-triage", "nhigov:workflow=wf-sp-backend-demo"],
     )
-    mixed_role = sp("mixed", "seed-mixed-role", owners=[PAUL], appRoleAssignments=[
+    mixed_role = sp("mixed", "seed-mixed-role", owners=[OWNER], appRoleAssignments=[
         assign("res", role_id(RES, "Records.Read.All"))])  # fmt: skip
-    orphan = sp("orphan", "seed-orphan-agent", agentKind="agentIdentity", sponsors=[PAUL],
+    orphan = sp("orphan", "seed-orphan-agent", agentKind="agentIdentity", sponsors=[OWNER],
                 agentIdentityBlueprintId="deleted-bp-app")  # fmt: skip
     ms_with_role = sp("ms-admin", "Some Microsoft service", local=False)
 
@@ -120,7 +120,7 @@ def synthetic_tenant() -> tuple[RawTenant, TenantState, dict[str, str]]:
     apps = [
         app(resource, owners=[PROVISIONER]),
         app(bp_principal, id="bp-summ-obj", keyCredentials=[cert(180)], owners=[PROVISIONER],
-            sponsors=[PAUL]),
+            sponsors=[OWNER]),
         app(control, id="scanner-obj", keyCredentials=[cert(180)], owners=[]),
         app(provisioner, id="prov-obj", keyCredentials=[cert(180)], owners=[]),
         app(secret_app, owners=[PROVISIONER], passwordCredentials=[cert(6)]),
@@ -128,15 +128,15 @@ def synthetic_tenant() -> tuple[RawTenant, TenantState, dict[str, str]]:
         app(graph_admin, owners=[PROVISIONER]),
         app(dir_role, owners=[PROVISIONER]),
         {**app(sp("x", "seed-bp-many-creds"), keyCredentials=[cert(90), cert(90), cert(90)],
-               owners=[PROVISIONER], sponsors=[PAUL]), "id": "bp-many-obj", "appId": "bp-many"},
+               owners=[PROVISIONER], sponsors=[OWNER]), "id": "bp-many-obj", "appId": "bp-many"},
     ]  # fmt: skip
     raw = RawTenant(
         tenant_id=TENANT, applications=apps, blueprint_ids={"bp-summ-obj", "bp-many-obj"},
         service_principals=sps,
         directory_roles={"dirrole": ["Directory Readers"], "ms-admin": ["Global Reader"]},
-        users={"paul": {"id": "paul", "userPrincipalName": "paul@tenant.example",
+        users={"owner": {"id": "owner", "userPrincipalName": "owner@tenant.example",
                         "accountEnabled": True, "userType": "Member"},
-               "paul@tenant.example": {"id": "paul", "userPrincipalName": "paul@tenant.example",
+               "owner@tenant.example": {"id": "owner", "userPrincipalName": "owner@tenant.example",
                                        "accountEnabled": True, "userType": "Member"}},
     )  # fmt: skip
     state = TenantState(
@@ -280,7 +280,7 @@ def test_collectors_expand_local_objects_only() -> None:
         "value": [{"id": "a1", "appId": "app1", "displayName": "mine"}],
         "@odata.nextLink": f"{g}applications?$skiptoken=2",
     })  # fmt: skip
-    respx.get(url__regex=rf"{g}applications/a\d/owners.*").respond(json={"value": [PAUL]})
+    respx.get(url__regex=rf"{g}applications/a\d/owners.*").respond(json={"value": [OWNER]})
     respx.get(url__regex=rf"{g}applications/a\d/federatedIdentityCredentials").respond(json=empty)
     respx.get(f"{g}servicePrincipals/microsoft.graph.agentIdentity").respond(json=empty)
     respx.get(f"{g}servicePrincipals/microsoft.graph.agentIdentityBlueprintPrincipal").respond(
@@ -295,14 +295,14 @@ def test_collectors_expand_local_objects_only() -> None:
     respx.get(f"{g}oauth2PermissionGrants").respond(json=empty)
     respx.get(f"{g}roleManagement/directory/roleDefinitions").respond(json=empty)
     respx.get(f"{g}roleManagement/directory/roleAssignments").respond(json=empty)
-    respx.get(f"{g}users/paul").respond(json={
-        "id": "paul", "userPrincipalName": "p@t.example", "accountEnabled": True})  # fmt: skip
+    respx.get(f"{g}users/owner").respond(json={
+        "id": "owner", "userPrincipalName": "p@t.example", "accountEnabled": True})  # fmt: skip
 
     with GraphClient(lambda: "t", sleep=lambda _: None) as graph:
         raw = collect_all(graph, TENANT, set())
     assert [a["id"] for a in raw.applications] == ["a1", "a2"]  # followed nextLink
     assert expanded.call_count == 2 and not not_expanded.called
-    assert raw.users["p@t.example"]["id"] == "paul"
+    assert raw.users["p@t.example"]["id"] == "owner"
 
 
 def test_policy_listed_blueprint_grant_is_not_drift() -> None:

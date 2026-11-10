@@ -86,6 +86,9 @@ class Config(BaseModel):
     # e.g. contoso.onmicrosoft.com. Substituted for {tenant_domain} in registry UPNs,
     # so the domain (which reveals the tenant) is never committed.
     tenant_domain: str | None = None
+    # The user name (before the @) of the person who owns and sponsors the example
+    # workflows, e.g. "alice". Substituted for {owner} in registry UPNs.
+    owner: str | None = None
     identity_backend: IdentityBackendKind = IdentityBackendKind.SERVICE_PRINCIPAL
     # Optional so an agent job in CI (which needs neither app) can load config.
     control_plane: ControlPlane | None = None
@@ -105,6 +108,7 @@ class Config(BaseModel):
 _ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "NHIGOV_TENANT_ID": ("tenant_id",),
     "NHIGOV_TENANT_DOMAIN": ("tenant_domain",),
+    "NHIGOV_OWNER": ("owner",),
     "NHIGOV_IDENTITY_BACKEND": ("identity_backend",),
     "NHIGOV_PROVISIONER_CLIENT_ID": ("control_plane", "provisioner", "client_id"),
     "NHIGOV_PROVISIONER_CERT_PATH": ("control_plane", "provisioner", "cert_path"),
@@ -125,18 +129,27 @@ def _set_path(data: dict[str, Any], path: tuple[str, ...], value: str) -> None:
     node[path[-1]] = value
 
 
+def _load_setting(name: str, path: Path, env: dict[str, str] | None) -> str | None:
+    """One top-level setting, without requiring a complete config (offline CI has none)."""
+    env = dict(os.environ) if env is None else env
+    value = env.get(f"NHIGOV_{name.upper()}", "").strip()
+    if value:
+        return value
+    if path.exists():
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        found = data.get(name)
+        return str(found).strip() if found else None
+    return None
+
+
 def load_tenant_domain(
     path: Path = Path("config.yaml"), env: dict[str, str] | None = None
 ) -> str | None:
-    """Just the tenant domain, without requiring a complete config (offline CI has none)."""
-    env = dict(os.environ) if env is None else env
-    if "NHIGOV_TENANT_DOMAIN" in env:
-        return env["NHIGOV_TENANT_DOMAIN"]
-    if path.exists():
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        value = data.get("tenant_domain")
-        return str(value) if value else None
-    return None
+    return _load_setting("tenant_domain", path, env)
+
+
+def load_owner(path: Path = Path("config.yaml"), env: dict[str, str] | None = None) -> str | None:
+    return _load_setting("owner", path, env)
 
 
 def load_config(path: Path = Path("config.yaml"), env: dict[str, str] | None = None) -> Config:

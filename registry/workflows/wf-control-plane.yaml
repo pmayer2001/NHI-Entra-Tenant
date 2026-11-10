@@ -3,8 +3,8 @@
 kind: Workflow
 id: wf-control-plane
 name: NHI governance tooling (nhigov)
-business_owner: paul@{tenant_domain}
-sponsor: paul@{tenant_domain}
+business_owner: "{owner}@{tenant_domain}"
+sponsor: "{owner}@{tenant_domain}"
 data_classification: restricted
 status: active
 expires: 2027-04-30
@@ -25,7 +25,7 @@ agents:
           - AgentIdentity.Read.All
           - Policy.Read.All
   - ref: nhigov-provisioner
-    runtimes: [local]                   # never in CI: its key stays on Paul's machine
+    runtimes: [local]                   # never in CI: its key stays on the operator's machine
     expected_cadence: on-demand
     permissions:
       - resource: microsoft-graph
@@ -47,8 +47,8 @@ exception:
     The provisioner must assign app roles to NHIs (AppRoleAssignment.ReadWrite.All)
     and set the tenant app management policy that blocks client secrets
     (Policy.ReadWrite.ApplicationConfiguration). Mitigations in ADR-005: key only on
-    Paul's machine, never in CI, own grants watched by discovery (NHI-005).
-  approved_by: paul@{tenant_domain}
+    the operator's machine, never in CI, own grants watched by discovery (NHI-005).
+  approved_by: "{owner}@{tenant_domain}"
   expires: 2027-01-31        # re-justify at the next review
   covers:
     - AppRoleAssignment.ReadWrite.All

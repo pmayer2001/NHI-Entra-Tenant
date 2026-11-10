@@ -20,14 +20,21 @@ The rules it enforces are in [docs/principles.md](docs/principles.md).
 
 ## Getting started
 
-1. Set up a tenant and the two control-plane apps by following [scripts/bootstrap_tenant.md](scripts/bootstrap_tenant.md).
-2. Copy `config.example.yaml` to `config.yaml` and fill in your tenant.
-3. Install and check:
+**[docs/setup.md](docs/setup.md)** walks through everything that happens outside this repo:
+- creating a free Entra tenant and a cost alert;
+- registering the scanner and provisioner apps, with each Graph permission they need and why;
+- certificates and configuration;
+- creating the agents with `plan`/`apply`, and running them;
+- the optional GitHub Actions setup (environments, variables and federated credentials).
+
+It ends with troubleshooting for the errors you're most likely to hit.
+
+Without a tenant, you can still run the offline checks:
 
 ```bash
 uv sync
+uv run pytest tests/unit
 uv run nhigov validate
-uv run nhigov plan      # read-only: what apply would change
 ```
 
 ## Commands

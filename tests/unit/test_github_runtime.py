@@ -141,6 +141,7 @@ def test_a_ci_scan_without_state_fails_instead_of_calling_everything_shadow(
         monkeypatch.setenv(k, v)
     monkeypatch.setenv("NHIGOV_TENANT_ID", "t")
     monkeypatch.setenv("NHIGOV_TENANT_DOMAIN", "contoso.example")
+    monkeypatch.setenv("NHIGOV_OWNER", "alice")
     monkeypatch.delenv(STATE_ENV, raising=False)
     result = CliRunner().invoke(
         app,
@@ -169,4 +170,5 @@ def test_a_ci_scan_without_the_tenant_domain_fails(
     monkeypatch.setenv("NHIGOV_TENANT_ID", "t")
     monkeypatch.setenv("NHIGOV_TENANT_DOMAIN", "")
     result = CliRunner().invoke(app, ["scan", "--summary-only", "--config", str(tmp_path / "x")])
-    assert result.exit_code == 2 and "NHIGOV_TENANT_DOMAIN" in result.output
+    assert result.exit_code == 2
+    assert "NHIGOV_TENANT_DOMAIN" in result.output and "NHIGOV_OWNER" in result.output

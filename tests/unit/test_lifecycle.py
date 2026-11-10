@@ -64,7 +64,7 @@ def tenant() -> TenantState:
 def inventory(t: TenantState, *, departing_enabled: bool = True,
               enabled: dict[str, bool] | None = None) -> Inventory:  # fmt: skip
     people = {}
-    for upn, ok in (("paul@tenant.example", True), (DEPARTING, departing_enabled)):
+    for upn, ok in (("owner@tenant.example", True), (DEPARTING, departing_enabled)):
         person = Person(id=upn, upn=upn, enabled=ok, member=True)
         people[upn] = person
     nhis = [
@@ -103,7 +103,7 @@ def test_departing_sponsor_is_disabled_after_the_grace_period() -> None:
     day14 = run(t, day13.state, DAY0 + timedelta(days=14), departing_enabled=False)
     assert kinds(day14) == ["disable"]
     assert "test-departing-sponsor" in day14.actions[0].reason
-    assert all(kinds(day14, k) == [] for k in t.nhis if k != KEY)  # Paul's NHIs untouched
+    assert all(kinds(day14, k) == [] for k in t.nhis if k != KEY)  # the owner's NHIs untouched
 
 
 @respx.mock

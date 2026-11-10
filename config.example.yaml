@@ -1,9 +1,12 @@
-# Copy to config.yaml (git-ignored) and fill in after following scripts/bootstrap_tenant.md.
+# Copy to config.yaml (git-ignored) and fill in while following docs/setup.md.
 # Every value can also be set with an environment variable (shown on the right),
 # which is how GitHub Actions will supply them.
 
 tenant_id: "00000000-0000-0000-0000-000000000000"          # NHIGOV_TENANT_ID
 tenant_domain: "yourtenant.onmicrosoft.com"           # NHIGOV_TENANT_DOMAIN
+# The user name (before the @) of the person who owns and sponsors the example
+# workflows: registry UPNs are written "{owner}@{tenant_domain}".
+owner: "alice"                                         # NHIGOV_OWNER
 
 # Chosen from the capability probe results (ADR-003): agent_id | service_principal
 identity_backend: service_principal                         # NHIGOV_IDENTITY_BACKEND

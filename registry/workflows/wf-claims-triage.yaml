@@ -1,8 +1,8 @@
 kind: Workflow
 id: wf-claims-triage
 name: Claims triage automation
-business_owner: paul@{tenant_domain}   # filled in from config.yaml at load time
-sponsor: paul@{tenant_domain}
+business_owner: "{owner}@{tenant_domain}"   # filled in from config.yaml at load time
+sponsor: "{owner}@{tenant_domain}"
 data_classification: restricted
 status: active                 # requested | active | suspended | retired
 expires: 2027-03-31

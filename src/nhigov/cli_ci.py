@@ -16,7 +16,9 @@ import typer
 from nhigov.config import load_config
 from nhigov.reconcile.federated import GITHUB_ISSUER, WantedFic
 from nhigov.reconcile.state import STATE_ENV, STATE_PATH, load_state
-from nhigov.registry.loader import PLACEHOLDER_DOMAIN, load_registry
+from nhigov.registry.loader import (
+    load_registry_for,
+)
 from nhigov.registry.models import IdentityType, Runtime
 
 ci_app = typer.Typer(no_args_is_help=True, help="GitHub Actions setup (federated sign-in).")
@@ -35,7 +37,7 @@ def vars_cmd(
 ) -> None:
     """Print the variables to set in each GitHub environment (Settings > Environments)."""
     cfg = load_config(config_path)
-    registry, _ = load_registry(registry_dir, cfg.tenant_domain or PLACEHOLDER_DOMAIN)
+    registry, _ = load_registry_for(cfg, registry_dir)
     state = load_state(state_path)
     if not cfg.github.repository:
         raise typer.BadParameter("set github.repository in config.yaml first")
@@ -51,6 +53,7 @@ def vars_cmd(
                 cp = cfg.cp
                 env |= {
                     "NHIGOV_TENANT_DOMAIN": cfg.tenant_domain or "",
+                    "NHIGOV_OWNER": cfg.owner or "",
                     "NHIGOV_IDENTITY_BACKEND": cfg.identity_backend.value,
                     "NHIGOV_SCANNER_CLIENT_ID": cp.scanner.client_id,
                     "NHIGOV_PROVISIONER_CLIENT_ID": cp.provisioner.client_id,

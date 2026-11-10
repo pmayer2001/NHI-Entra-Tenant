@@ -11,11 +11,11 @@ from typing import Annotated
 
 import typer
 
-from nhigov.config import load_tenant_domain
+from nhigov.config import load_owner, load_tenant_domain
 from nhigov.lifecycle.state import load_lifecycle
 from nhigov.reconcile.state import STATE_PATH, load_state
 from nhigov.registry.findings import Severity
-from nhigov.registry.loader import PLACEHOLDER_DOMAIN, load_registry
+from nhigov.registry.loader import PLACEHOLDER_DOMAIN, PLACEHOLDER_OWNER, load_registry
 from nhigov.registry.validate import validate_registry
 from nhigov.usage.analyze import Verdict, analyze, load_events, parse_window, write_report
 
@@ -48,7 +48,9 @@ def analyze_cmd(
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from None
     registry, loaded = load_registry(
-        registry_dir, load_tenant_domain(config_path) or PLACEHOLDER_DOMAIN
+        registry_dir,
+        load_tenant_domain(config_path) or PLACEHOLDER_DOMAIN,
+        load_owner(config_path) or PLACEHOLDER_OWNER,
     )
     if any(f.severity is Severity.ERROR for f in loaded + validate_registry(registry)):
         raise typer.BadParameter("the registry has errors; run `nhigov validate` first")

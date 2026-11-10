@@ -15,7 +15,7 @@ It writes `docs/spikes/agent-id-token-spike-results.md` (claims only, IDs labell
 ## Steps (what the script does; as `nhigov-provisioner`, Graph v1.0)
 
 1. **Blueprint**
-   `POST /applications` `{"@odata.type":"Microsoft.Graph.AgentIdentityBlueprint","displayName":"bp-spike","sponsors@odata.bind":["https://graph.microsoft.com/v1.0/users/<paul-oid>"]}`
+   `POST /applications` `{"@odata.type":"Microsoft.Graph.AgentIdentityBlueprint","displayName":"bp-spike","sponsors@odata.bind":["https://graph.microsoft.com/v1.0/users/<owner-object-id>"]}`
    Record `id` (object ID) and `appId`.
 2. **Blueprint principal**
    `POST /servicePrincipals/microsoft.graph.agentIdentityBlueprintPrincipal` `{"appId":"<bp appId>"}`

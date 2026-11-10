@@ -1,7 +1,7 @@
 """Report-only check of the control plane's Graph permissions and CI sign-in (P9).
 
 The provisioner and scanner were bootstrapped by hand and are never changed by
-`apply` (Paul's decision, 2026-11-01): a reconciler able to edit the
+`apply` (decided 2026-11-01): a reconciler able to edit the
 provisioner's own permissions is one bug away from granting itself more.
 So plan compares what they hold with wf-control-plane.yaml and reports drift.
 

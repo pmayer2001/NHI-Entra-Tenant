@@ -19,6 +19,7 @@ import yaml
 from typer.testing import CliRunner
 
 from nhigov.cli import app
+from nhigov.config import load_owner
 from nhigov.graph.client import GraphClient
 from nhigov.registry.findings import Finding, Severity
 from nhigov.registry.loader import load_registry
@@ -69,7 +70,7 @@ CASES: list[tuple[str, str, Callable[[dict[str, Any]], object], str]] = [
     ("skill-with-permissions-P5", SUMMARIZER,
      lambda d: d.update(skills=[{"name": "x", "permissions": []}]), "REG-000"),
     ("review-after-expiry", CLAIMS, lambda d: d.update(review_by=date(2027, 6, 1)), "REG-000"),
-    ("bad-upn", CLAIMS, lambda d: d.update(sponsor="paul"), "REG-000"),
+    ("bad-upn", CLAIMS, lambda d: d.update(sponsor="owner"), "REG-000"),
     ("unknown-agent-ref", CLAIMS, lambda d: d["agents"][0].update(ref="agent-ghost"), "REG-003"),
     ("unknown-resource", CLAIMS,
      lambda d: d["agents"][0]["permissions"][0].update(resource="res-ghost"), "REG-004"),
@@ -147,7 +148,7 @@ def test_yaml_syntax_error_is_reported_not_raised(reg_dir: Path) -> None:
 def test_tenant_domain_is_substituted_not_committed(reg_dir: Path) -> None:
     assert "{tenant_domain}" in (reg_dir / CLAIMS).read_text(encoding="utf-8")
     registry, _ = load_registry(reg_dir, "contoso.example")
-    assert registry.workflows["wf-claims-triage"].sponsor == "paul@contoso.example"
+    assert registry.workflows["wf-claims-triage"].sponsor == "owner@contoso.example"
 
 
 # ------------------------------------------------------------------ online (REG-020)
@@ -167,7 +168,7 @@ def test_online_flags_missing_disabled_and_guest_people(reg_dir: Path) -> None:
     respx.get(f"{GRAPH_USERS}off@contoso.example").respond(
         json={"accountEnabled": False, "userType": "Member"}
     )
-    for ok in ("paul", "test-departing-sponsor"):
+    for ok in ("owner", "test-departing-sponsor"):
         respx.get(f"{GRAPH_USERS}{ok}@contoso.example").respond(
             json={"accountEnabled": True, "userType": "Member"}
         )
@@ -193,3 +194,11 @@ def test_cli_exit_codes(reg_dir: Path, tmp_path: Path) -> None:
     bad = runner.invoke(app, ["validate", "--registry", str(reg_dir), *missing_config])
     assert bad.exit_code == 1
     assert "REG-006" in bad.output
+
+
+def test_owner_and_domain_are_filled_in_from_config() -> None:
+    # Committed files say "{owner}@{tenant_domain}"; whoever runs the tenant sets both.
+    registry, _ = load_registry(REPO_REGISTRY, "contoso.example", "alice")
+    wf = registry.workflows["wf-claims-triage"]
+    assert wf.sponsor == wf.business_owner == "alice@contoso.example"
+    assert load_owner(Path("missing.yaml"), {"NHIGOV_OWNER": " alice\n"}) == "alice"

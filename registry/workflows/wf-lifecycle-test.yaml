@@ -3,7 +3,7 @@
 kind: Workflow
 id: wf-lifecycle-test
 name: Lifecycle test (departing sponsor)
-business_owner: paul@{tenant_domain}
+business_owner: "{owner}@{tenant_domain}"
 sponsor: test-departing-sponsor@{tenant_domain}   # the user who "leaves"
 data_classification: restricted
 status: retired                # test done (sponsor-departure verified); NHI goes through retirement

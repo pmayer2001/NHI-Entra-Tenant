@@ -7,8 +7,8 @@
 kind: Workflow
 id: wf-usage-demo
 name: Usage analytics demo (over-granted on purpose, then fixed)
-business_owner: paul@{tenant_domain}
-sponsor: paul@{tenant_domain}
+business_owner: "{owner}@{tenant_domain}"
+sponsor: "{owner}@{tenant_domain}"
 data_classification: restricted
 status: active
 expires: 2027-02-01

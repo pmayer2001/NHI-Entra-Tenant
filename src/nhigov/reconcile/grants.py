@@ -3,8 +3,8 @@
 Both backends end in a service principal (an agent identity is one), so this is
 backend-agnostic. Only roles on resources nhigov manages are reconciled: those
 role IDs are derived from the registry (stable UUID5s), and anything else an NHI
-holds there is revoked, because revoking can only ever reduce access (Paul's
-decision, 2026-11-01). Grants on unmanaged resources (Microsoft Graph) are
+holds there is revoked, because revoking can only ever reduce access (decided
+2026-11-01). Grants on unmanaged resources (Microsoft Graph) are
 reported, not changed.
 """
 

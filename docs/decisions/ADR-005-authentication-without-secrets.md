@@ -22,7 +22,7 @@ Certificates default to **180 days**, matching the app management policy cap (AD
 `Application.ReadWrite.OwnedBy`, `AppRoleAssignment.ReadWrite.All`, `Policy.ReadWrite.ApplicationConfiguration`, `AgentIdentityBlueprint.Create`, `AgentIdentityBlueprint.AddRemoveCreds.All`, `AgentIdentityBlueprint.UpdateAuthProperties.All`, `AgentIdentityBlueprintPrincipal.Create`, `AgentIdentity.Create.All`.
 `AgentIdentity.Create.All` is **provisional**. Microsoft Learn says blueprint owners can create agent identities without an Agent ID *role*, but it doesn't say whether an app-only caller still needs a Graph *permission*. The probe (W03) decides, and we remove the permission if ownership alone suffices.
 
-### Amendment (2026-10-31): approved by Paul and applied
+### Amendment (2026-10-31): approved and applied
 The write probe showed the provisioner can **create** Agent ID objects but not **update or delete** them. Ownership plus `Application.ReadWrite.OwnedBy` isn't enough. Without delete, the lifecycle engine (ADR-012) and ADR-006's disable-before-delete model can't work on the Agent ID backend. Proposed additions, each narrower than the `ReadWrite.All` the provisioner's ceiling already allows:
 
 | Permission | Needed for | Evidence |
@@ -33,7 +33,7 @@ The write probe showed the provisioner can **create** Agent ID objects but not *
 
 Confirmed after granting: `AgentIdentityBlueprint.DeleteRestore.All` works only on `DELETE /applications/{id}`, not on the documented typed-cast path (403).
 
-### Amendment (2026-11-01): blueprint principal delete, approved by Paul and applied
+### Amendment (2026-11-01): blueprint principal delete, approved and applied
 | Permission | Needed for | Evidence |
 |---|---|---|
 | `AgentIdentityBlueprintPrincipal.DeleteRestore.All` | Delete a blueprint principal: the middle step of retiring a blueprint (agents -> blueprint principal -> blueprint, because deletes don't cascade). Soft-delete, restorable for 30 days. | Seed cleanup: 403 on both `DELETE /servicePrincipals/{id}` and the typed-cast path, although the provisioner owns the principal. Graph Explorer can't consent to Agent ID scopes, so a human couldn't delete it either. |
@@ -43,21 +43,21 @@ Not on `policy.high_risk_permissions`. Declared in `wf-control-plane.yaml`, so t
 **Not proposed:** `AgentIdentity.ReadWrite.All`. If `EnableDisable.All` doesn't allow setting `tags`, ADR-006 falls back to the state file plus naming convention rather than widening the provisioner.
 **Still provisional:** `AgentIdentity.Create.All`. W03 succeeded *with* it, so we don't yet know whether ownership alone would suffice.
 
-### Amendment (2026-11-01): `Policy.Read.All`, approved by Paul, applied, then **reverted**
+### Amendment (2026-11-01): `Policy.Read.All`, approved, applied, then **reverted**
 | Permission | Needed for | Evidence |
 |---|---|---|
 | `Policy.Read.All` | `GET`/`PATCH /policies/defaultAppManagementPolicy` (`nhigov lifecycle policy`, which blocks client secrets tenant-wide, P7) | With only the documented `Policy.ReadWrite.ApplicationConfiguration` in its token, the provisioner got 403 `Authorization_RequestDenied` on both the read (capability probe, and again later on v1.0 and beta) and the write. Once `Policy.Read.All` showed up in its token (a few minutes after consent), the read returned 200. |
 
 Read-only, and the scanner already holds it, so the provisioner's write reach doesn't change. It's outside the provisioner's planned ceiling, so it's recorded here and declared in `wf-control-plane.yaml`. The Learn pages list only `Policy.ReadWrite.ApplicationConfiguration` for app-only access (checked 2026-11-01).
 
-**Reverted (2026-11-01, Paul's decision).** The grant fixed the read but not the write: a Global Administrator got the same 403 on the PATCH, so the write is most likely licence-gated on the free tenant (ADR-012). With no write to support, the provisioner doesn't need to read the policy. `nhigov lifecycle policy` already reads it as the scanner. Removed from the registry; the grant is revoked in the tenant. If a tenant can write the policy, re-test whether the provisioner needs `Policy.Read.All` for the PATCH.
+**Reverted (2026-11-01).** The grant fixed the read but not the write: a Global Administrator got the same 403 on the PATCH, so the write is most likely licence-gated on the free tenant (ADR-012). With no write to support, the provisioner doesn't need to read the policy. `nhigov lifecycle policy` already reads it as the scanner. Removed from the registry; the grant is revoked in the tenant. If a tenant can write the policy, re-test whether the provisioner needs `Policy.Read.All` for the PATCH.
 
 ### Read through the scanner, write through the provisioner
 `plan` uses the scanner, for example to resolve sponsor UPNs to object IDs. Only `apply` uses the provisioner. So the provisioner never needs `User.Read*`, and a bug in `plan` can't write.
 
 ## Known risk: `AppRoleAssignment.ReadWrite.All`
 This permission lets its holder grant **any** app role, including Graph roles, to **any** service principal, *including itself*. It's a well-known privilege-escalation path: a compromised provisioner can make itself Global-Admin-equivalent through `RoleManagement.ReadWrite.Directory`. Mitigations:
-- The private key lives only on Paul's machine. CI never gets the provisioner, only the scanner and per-workflow NHIs.
+- The private key lives only on the operator's machine. CI never gets the provisioner, only the scanner and per-workflow NHIs.
 - Discovery rule NHI-005 watches the provisioner's own grants (P9: the governance tooling is governed too).
 - With a P2 trial: evaluate Conditional Access for workload identities to pin the provisioner to known IPs (P2 trial only).
 

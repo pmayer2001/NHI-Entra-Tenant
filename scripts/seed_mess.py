@@ -40,7 +40,10 @@ from nhigov.graph.client import GraphClient, GraphError
 from nhigov.reconcile.engine import send
 from nhigov.reconcile.resources import role_id
 from nhigov.reconcile.state import load_state
-from nhigov.registry.loader import PLACEHOLDER_DOMAIN, load_registry
+from nhigov.registry.loader import (
+    PLACEHOLDER_OWNER,
+    load_registry_for,
+)
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 
@@ -69,7 +72,7 @@ class Expected:
     rule: str
     object_id: str
     name: str
-    manual: bool = False  # depends on a step Paul does by hand (S4)
+    manual: bool = False  # depends on a step the operator does by hand (S4)
 
 
 @dataclass
@@ -193,7 +196,7 @@ class Planter:
         self.assign(sp, graph_sp["id"], dir_rw)
         self.expect("001 002 005", sp, "seed-graph-admin")
 
-        # S4: directory role, assigned by Paul (the provisioner can't, by design).
+        # S4: directory role, assigned by hand (the provisioner can't, by design).
         _, sp = self.app_and_sp("seed-dir-role")
         self.expect("001 002", sp, "seed-dir-role")
         self.expect("006", sp, "seed-dir-role", manual=True)
@@ -261,7 +264,7 @@ def _clients(cfg: Config) -> tuple[GraphClient, GraphClient]:
 
 
 def _scan(cfg: Config) -> list[Finding]:
-    registry, _ = load_registry(Path("registry"), cfg.tenant_domain or PLACEHOLDER_DOMAIN)
+    registry, _ = load_registry_for(cfg, Path("registry"))
     state = load_state()
     now = datetime.now(UTC)
     return evaluate(collect_inventory(cfg, registry, state, now), registry, state, now)
@@ -288,7 +291,8 @@ def plant(
     typer.echo(f"baseline scan: {len(s.baseline)} existing finding(s) recorded")
     prov, scanner = _clients(cfg)
     with prov, scanner:
-        sponsor = scanner.get(f"users/paul@{cfg.tenant_domain}", params={"$select": "id"})["id"]
+        owner = f"{cfg.owner or PLACEHOLDER_OWNER}@{cfg.tenant_domain}"
+        sponsor = scanner.get(f"users/{owner}", params={"$select": "id"})["id"]
         Planter(cfg, prov, scanner, s).plant(sponsor)
     typer.secho(
         "\nManual step for S4 (the provisioner may not assign directory roles, ADR-005):\n"

@@ -3,16 +3,17 @@
 Every problem becomes a Finding so `nhigov validate` can report all of them in
 one run instead of stopping at the first broken file.
 
-UPNs are written as `paul@{tenant_domain}` in committed files. The real domain
-reveals the tenant (its ID is one public lookup away), so it's substituted at
-load time from config/env and never committed.
+UPNs are written as `{owner}@{tenant_domain}` in committed files. The real domain
+reveals the tenant (its ID is one public lookup away) and the owner is whoever
+runs this tenant, so both are substituted at load time from config/env and never
+committed.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 from pydantic import ValidationError
@@ -20,8 +21,13 @@ from pydantic import ValidationError
 from nhigov.registry.findings import Finding, Severity
 from nhigov.registry.models import AgentDefinition, Policy, Resource, Workflow
 
+if TYPE_CHECKING:
+    from nhigov.config import Config
+
 TENANT_DOMAIN_VAR = "{tenant_domain}"
 PLACEHOLDER_DOMAIN = "tenant.example"  # offline default: valid UPN shape, never a real tenant
+OWNER_VAR = "{owner}"
+PLACEHOLDER_OWNER = "owner"  # offline default for the human who sponsors the examples
 
 _KINDS: dict[str, type[AgentDefinition | Resource | Workflow | Policy]] = {
     "AgentDefinition": AgentDefinition,
@@ -53,7 +59,7 @@ def _schema_errors(exc: ValidationError) -> str:
 
 
 def load_registry(
-    root: Path, tenant_domain: str = PLACEHOLDER_DOMAIN
+    root: Path, tenant_domain: str = PLACEHOLDER_DOMAIN, owner: str = PLACEHOLDER_OWNER
 ) -> tuple[Registry, list[Finding]]:
     registry = Registry()
     findings: list[Finding] = []
@@ -63,7 +69,11 @@ def load_registry(
 
     for path in sorted(root.rglob("*.yaml")):
         where = path.as_posix()
-        text = path.read_text(encoding="utf-8").replace(TENANT_DOMAIN_VAR, tenant_domain)
+        text = (
+            path.read_text(encoding="utf-8")
+            .replace(TENANT_DOMAIN_VAR, tenant_domain)
+            .replace(OWNER_VAR, owner)
+        )
         try:
             data: Any = yaml.safe_load(text)
         except yaml.YAMLError as exc:
@@ -100,3 +110,10 @@ def load_registry(
             registry.workflows[obj.id] = obj
 
     return registry, findings
+
+
+def load_registry_for(cfg: Config, root: Path) -> tuple[Registry, list[Finding]]:
+    """The registry with this tenant's domain and owner filled in (placeholders if unset)."""
+    return load_registry(
+        root, cfg.tenant_domain or PLACEHOLDER_DOMAIN, cfg.owner or PLACEHOLDER_OWNER
+    )

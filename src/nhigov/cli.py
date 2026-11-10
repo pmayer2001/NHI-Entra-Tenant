@@ -28,7 +28,7 @@ from nhigov.certs import DEFAULT_CERT_DIR, DEFAULT_LIFETIME_DAYS, generate_self_
 from nhigov.cli_ci import ci_app
 from nhigov.cli_lifecycle import lifecycle_app
 from nhigov.cli_usage import usage_app
-from nhigov.config import Config, load_config, load_tenant_domain
+from nhigov.config import Config, load_config, load_owner, load_tenant_domain
 from nhigov.discovery.inventory import Inventory
 from nhigov.discovery.report import write_reports
 from nhigov.discovery.rules.base import Finding
@@ -52,7 +52,12 @@ from nhigov.reconcile.plan import ResourcePlan, apply_plan, plan_resource
 from nhigov.reconcile.resources import desired_application, desired_service_principal
 from nhigov.reconcile.state import STATE_ENV, STATE_PATH, TenantState, load_state, save_state
 from nhigov.registry.findings import Severity
-from nhigov.registry.loader import PLACEHOLDER_DOMAIN, load_registry
+from nhigov.registry.loader import (
+    PLACEHOLDER_DOMAIN,
+    PLACEHOLDER_OWNER,
+    load_registry,
+    load_registry_for,
+)
 from nhigov.registry.models import Backend, Runtime
 from nhigov.registry.online import validate_online
 from nhigov.registry.validate import validate_registry
@@ -189,7 +194,9 @@ def validate(
     domain = load_tenant_domain(config_path)
     if online and not domain:
         raise typer.BadParameter("--online needs tenant_domain in config.yaml")
-    registry, findings = load_registry(registry_dir, domain or PLACEHOLDER_DOMAIN)
+    registry, findings = load_registry(
+        registry_dir, domain or PLACEHOLDER_DOMAIN, load_owner(config_path) or PLACEHOLDER_OWNER
+    )
     findings += validate_registry(registry)
     if online:
         cfg = load_config(config_path)
@@ -220,7 +227,7 @@ def api_probe(
 ) -> None:
     """Read-only checks before registering the API in Entra (runs as the scanner)."""
     cfg = load_config(config_path)
-    registry, findings = load_registry(registry_dir, cfg.tenant_domain or PLACEHOLDER_DOMAIN)
+    registry, findings = load_registry_for(cfg, registry_dir)
     resource = registry.resources.get(resource_id)
     if resource is None or findings:
         raise typer.BadParameter(f"{resource_id} not loadable; run `nhigov validate` first")
@@ -254,7 +261,7 @@ def api_gate_check(
     Doesn't change anything: it only requests tokens.
     """
     cfg = load_config(config_path)
-    registry, _ = load_registry(registry_dir, cfg.tenant_domain or PLACEHOLDER_DOMAIN)
+    registry, _ = load_registry_for(cfg, registry_dir)
     scope = f"{registry.resources['res-sensitive-records'].identifier_uri}/.default"
     clients = {
         "nhigov-scanner": cfg.cp.scanner,
@@ -324,7 +331,7 @@ class FullPlan:
 
 
 def _build_plan(cfg: Config, registry_dir: Path, state: TenantState) -> FullPlan:
-    registry, findings = load_registry(registry_dir, cfg.tenant_domain or PLACEHOLDER_DOMAIN)
+    registry, findings = load_registry_for(cfg, registry_dir)
     findings += validate_registry(registry)
     if any(f.severity is Severity.ERROR for f in findings):
         raise typer.BadParameter("the registry has errors; run `nhigov validate` first")
@@ -501,17 +508,19 @@ def scan(
 ) -> None:
     """Inventory every NHI in the tenant and flag problems (read-only, as the scanner)."""
     cfg = load_config(config_path)
-    registry, findings_reg = load_registry(registry_dir, cfg.tenant_domain or PLACEHOLDER_DOMAIN)
+    registry, findings_reg = load_registry_for(cfg, registry_dir)
     if any(f.severity is Severity.ERROR for f in findings_reg + validate_registry(registry)):
         raise typer.BadParameter("the registry has errors; run `nhigov validate` first")
     state = load_state(state_path)
     in_github = "ACTIONS_ID_TOKEN_REQUEST_URL" in os.environ
-    if in_github and not cfg.tenant_domain:
-        # Registry sponsors are `user@{tenant_domain}`; with the placeholder domain none
-        # of them exists, and every managed NHI gets NHI-002.
+    missing = [v for v, ok in (("NHIGOV_TENANT_DOMAIN", cfg.tenant_domain),
+                               ("NHIGOV_OWNER", cfg.owner)) if not ok]  # fmt: skip
+    if in_github and missing:
+        # Registry sponsors are `{owner}@{tenant_domain}`; with placeholders none of them
+        # exists, and every managed NHI gets NHI-002.
         raise typer.BadParameter(
-            "NHIGOV_TENANT_DOMAIN is empty or unset in this GitHub environment, so registry "
-            "sponsors can't be resolved. Set it to the value `nhigov ci vars` prints."
+            f"{', '.join(missing)} empty or unset in this GitHub environment, so registry "
+            "sponsors can't be resolved. Set them to the values `nhigov ci vars` prints."
         )
     if in_github and not (state.resources or state.blueprints or state.nhis):
         # Without state every managed NHI looks like shadow (NHI-001): a wrong answer,
@@ -577,7 +586,7 @@ def agent_run(
 ) -> None:
     """Run one agent as its own NHI against the running Sensitive Records API."""
     cfg = load_config(config_path)
-    registry, _ = load_registry(Path("registry"), cfg.tenant_domain or PLACEHOLDER_DOMAIN)
+    registry, _ = load_registry_for(cfg, Path("registry"))
     key = f"{workflow}/{agent}"
     wf = registry.workflows.get(workflow)
     entry = next((wa for wa in wf.agents if wa.ref == agent), None) if wf else None

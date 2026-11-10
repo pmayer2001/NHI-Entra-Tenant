@@ -40,7 +40,10 @@ from nhigov.probe.report import redact
 from nhigov.reconcile.engine import PlanError
 from nhigov.reconcile.state import STATE_PATH, load_state, save_state
 from nhigov.registry.findings import Severity
-from nhigov.registry.loader import PLACEHOLDER_DOMAIN, Registry, load_registry
+from nhigov.registry.loader import (
+    Registry,
+    load_registry_for,
+)
 from nhigov.registry.models import Backend
 from nhigov.registry.validate import validate_registry
 
@@ -59,7 +62,7 @@ STATE_COLORS = {"disabled": "red", "expiring": "yellow", "soft-deleted": "red", 
 
 
 def _registry(cfg: Config) -> Registry:
-    registry, findings = load_registry(Path("registry"), cfg.tenant_domain or PLACEHOLDER_DOMAIN)
+    registry, findings = load_registry_for(cfg, Path("registry"))
     if any(f.severity is Severity.ERROR for f in findings + validate_registry(registry)):
         raise typer.BadParameter("the registry has errors; run `nhigov validate` first")
     return registry

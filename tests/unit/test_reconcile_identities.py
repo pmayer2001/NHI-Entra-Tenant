@@ -27,7 +27,7 @@ from nhigov.registry.models import Backend, WorkflowStatus
 REGISTRY, _ = load_registry(Path(__file__).parents[2] / "registry")
 RESOURCE = REGISTRY.resources["res-sensitive-records"]
 TODAY = date(2026, 11, 1)
-SPONSOR = "paul@tenant.example"  # the loader's offline placeholder domain
+SPONSOR = "owner@tenant.example"  # the loader's offline placeholder domain
 DEPARTING = "test-departing-sponsor@tenant.example"  # wf-lifecycle-test
 CLIENTS = {"nhigov-scanner": "scanner-app", "nhigov-provisioner": "provisioner-app"}
 SUMMARIZER = "wf-claims-triage/agent-summarizer"

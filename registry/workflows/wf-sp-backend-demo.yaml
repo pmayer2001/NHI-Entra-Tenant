@@ -4,8 +4,8 @@
 kind: Workflow
 id: wf-sp-backend-demo
 name: Service-principal backend demo
-business_owner: paul@{tenant_domain}
-sponsor: paul@{tenant_domain}
+business_owner: "{owner}@{tenant_domain}"
+sponsor: "{owner}@{tenant_domain}"
 data_classification: restricted
 status: active
 backend: service_principal

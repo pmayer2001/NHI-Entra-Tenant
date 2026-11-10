@@ -69,7 +69,7 @@ class CertificateTokenProvider:
         if not cert_path.exists():
             raise FileNotFoundError(
                 f"Certificate not found at {cert_path}. Run `nhigov cert new` first "
-                "(see scripts/bootstrap_tenant.md)."
+                "(see docs/setup.md)."
             )
         self._credential = CertificateCredential(
             tenant_id=tenant_id, client_id=app.client_id, certificate_path=str(cert_path)

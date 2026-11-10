@@ -21,10 +21,10 @@ The first `plan`/`apply` handled one resource API. The reconciler now has to cre
   | `suspended`, `retired` | Disabled; never created if missing |
 
   Deleting is the lifecycle engine's job (ADR-012).
-- **Grants:** on resources nhigov manages, the reconciler grants what the registry declares and **revokes anything else** (Paul, 2026-11-01). Revoking can only reduce access. Grants on unmanaged resources (Microsoft Graph) are reported, not changed.
+- **Grants:** on resources nhigov manages, the reconciler grants what the registry declares and **revokes anything else** (2026-11-01). Revoking can only reduce access. Grants on unmanaged resources (Microsoft Graph) are reported, not changed.
 - **Credentials:** `apply` uploads a local certificate's *public* key only when the object has no credential. Replacing a credential is rotation, which belongs to the lifecycle engine (ADR-012: create new, verify, then remove old).
-- **The control plane is report-only** (Paul, 2026-11-01). `plan` compares the scanner's and provisioner's Graph grants with `wf-control-plane.yaml` and reports drift. `apply` never edits them: a bug in a reconciler that can change the provisioner's own permissions could grant itself more.
-- **Sponsors** are set at create. `plan` tries to read them back and reports a 403 instead of failing (Paul, 2026-11-01). The docs list only `AgentIdentity.ReadWrite.All` for reading sponsors, and the scanner stays read-only.
+- **The control plane is report-only** (2026-11-01). `plan` compares the scanner's and provisioner's Graph grants with `wf-control-plane.yaml` and reports drift. `apply` never edits them: a bug in a reconciler that can change the provisioner's own permissions could grant itself more.
+- **Sponsors** are set at create. `plan` tries to read them back and reports a 403 instead of failing (2026-11-01). The docs list only `AgentIdentity.ReadWrite.All` for reading sponsors, and the scanner stays read-only.
 
 ## Alternatives rejected
 - **Terraform-style saved plan files:** re-planning immediately before writing gives the same safety without a stale-plan problem. The confirmation prompt shows exactly what will run.

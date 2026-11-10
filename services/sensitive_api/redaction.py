@@ -18,7 +18,7 @@ class Show(StrEnum):
 
 
 METADATA = ("id", "status", "created_at", "updated_at")
-# ADR-004's sensitive fields, plus the claimant's name (Paul, 2026-11-01): triage needs
+# ADR-004's sensitive fields, plus the claimant's name (2026-11-01): triage needs
 # the claim, not who made it, so no agent role sees a person's identity.
 PII = ("claimant_name", "ssn", "date_of_birth", "account_number")
 

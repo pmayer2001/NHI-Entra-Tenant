@@ -1,7 +1,7 @@
 """Execute probe checks.
 
 Read checks run as `nhigov-scanner`. Write checks run as `nhigov-provisioner` and
-mutate the tenant, so they only execute with --execute after Paul confirms
+mutate the tenant, so they only execute with --execute after the operator confirms
 (the operator confirms every write); otherwise they come back as PLANNED. Every object the write
 sequence creates is named `nhigov-probe-*` and deleted in a finally block.
 
